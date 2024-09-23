@@ -1,8 +1,8 @@
 *.RData
 *.csv
-./Data
-./OlderScripts
-./Visualizations
+Data/*
+OlderScripts/*
+Visualizations/*
 .DS_Store
 .Rapp.history
 .Rhistory
