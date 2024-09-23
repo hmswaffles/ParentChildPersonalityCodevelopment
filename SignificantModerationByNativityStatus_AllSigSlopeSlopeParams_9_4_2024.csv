@@ -1,0 +1,7 @@
+"","TrajectoryType","lhs","op","rhs","group","est.std","se","z","pvalue","ci.lower","ci.upper"
+"1","Full","ChildAgreeablenessSlope","~~","MomOpennesssSlope","Born in US (2nd+ generation)",-0.326022955572475,0.155250825701449,-2.09997566260565,0.0357309820725833,-0.630308982517422,-0.0217369286275294
+"2","Full","ChildAgreeablenessSlope","~~","MomOpennesssSlope","Born in Mexico (1st Gen)",0.363807873423325,0.212456615776501,1.71238665406419,0.0868254368942294,-0.0525994417758814,0.780215188622531
+"3","Overlap","ChildAgreeablenessSlope","~~","MomOpennesssSlope","Born in US (2nd+ generation)",-0.290050166325084,0.154429463031166,-1.87820484920387,0.0603531470520333,-0.592726352018029,0.0126260193678597
+"4","Overlap","ChildAgreeablenessSlope","~~","MomOpennesssSlope","Born in Mexico (1st Gen)",0.306924723939533,0.186556939315144,1.64520668631391,0.0999271951367067,-0.0587201581841726,0.672569606063239
+"5","Overlap","ChildNeuroticismSlope","~~","DadNeuroticismSlope","Born in US (2nd+ generation)",-0.270366831124718,0.235453016644556,-1.14828357256882,0.250851518428016,-0.731846263799357,0.191112601549922
+"6","Overlap","ChildNeuroticismSlope","~~","DadNeuroticismSlope","Born in Mexico (1st Gen)",0.488897205731515,0.298410999704682,1.63833506879889,0.101351815975784,-0.0959776062802546,1.07377201774328
