@@ -3,3 +3,7 @@
 ./Data
 ./OlderScripts
 ./Visualizations
+.DS_Store
+.Rapp.history
+.Rhistory
+.ipynb_checkpoints/
