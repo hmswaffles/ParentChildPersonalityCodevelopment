@@ -1,5 +1,6 @@
 *.RData
 *.csv
+*.xlsx
 Data/*
 OlderScripts/*
 Visualizations/*

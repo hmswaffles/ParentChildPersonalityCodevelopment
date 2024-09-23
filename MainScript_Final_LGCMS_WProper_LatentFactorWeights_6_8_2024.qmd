@@ -1,0 +1,5186 @@
+---
+title: "CoDev in Families: Main Script"
+author: "Evan A. Warfel"
+format: html
+editor: visual
+format: 
+  html:
+    code-tools: true
+    code-copy: true
+    code-line-numbers: true
+    code-link: true
+    theme: united
+    highlight-style: tango
+    df-print: paged
+    code-fold: show
+    toc: true
+    toc-float: true
+    self-contained: true
+---
+
+# Paradoxical Patterns of Personality Co-development in Families
+
+Welcome to this project. This is the main data script; it was easier to keep everything in one big file. Data has been pre-processed in a Jupyter notebook also available in this github directory. NB: I find this much easier to view in "source" mode in Rstudio, the outline with the section headings make navigating this file much easier.
+
+The overall strategy is as follows: 1. Once the data is pre-processed, create univariate growth curve models. 2. Store the Univariate LGCMs in a table, and programmatically combine them into Bivariate LGCMs. 3. Fit all of the models in parallel, extract parameters and fit metrics programmatically, etc. 4. Repeat the same kind of procedure for moderators.
+
+Overall, the main strategy here is programmatically morph tables of models into final tables of parameter estimates.
+
+# ----- Section 0: Housekeeping ----- ----- -----
+
+## Packages
+
+First, we load some packages and set the defaults:
+
+```{r}
+set.seed(42)
+options(max.print = 2000, width = 120, repr.matrix.max.rows = 600, repr.matrix.max.cols = 210)
+
+library(semTools)
+library(dplyr)
+library(lavaan)
+library(kableExtra)
+library(knitr)
+library(tidyverse)
+library(future.apply)
+library(ggridges)
+library(patchwork)
+library(ragg)
+library(showtext)
+
+availableCores()
+plan(multisession, workers = availableCores() - 1)
+nbrOfWorkers()
+```
+
+## Getting the data
+
+```{r}
+#This data has been preprocessed via the python script. After items were reversed, they were parceled. Then, each parcel was  
+ZSCORED <- read.csv("./Data/ParceledData_ZScoredToBaselineWave_6_26_2024.csv")
+head(ZSCORED)
+```
+
+# ----- Section 1: Univariate Models ----- ----- -----
+
+This section contains all of the base univariate growth curve models. Constraints were systematically tuned by hand according the procedures laid out in the methods section of the accompanying paper.
+
+## 1. Univariate Growth Curves
+
+Checks and gotchas for these models: 1. The =\~ NA\*Variable+Varible syntax comes from a Nilam Ram demo. 2. I've used three decimal places for the latent slope loadings. 3.The intercepts of the trajectories are at the actual midpoint instead of putting a 0 before one of the waves. 4. I used differences in the mean child age at each wave as the guide to how much time has elasped between waves.
+
+## -------- EXTRAVERSION --------
+
+### Full Trajectory Models:
+
+#### CHILD EXTRAVERSION UNIVARIATE
+
+```{r}
+Child_Univariate_Extraversion <- "
+#-------------------- ChildPartialStrongExtraversion --------------------
+#Latent Variables:
+W5Extraversion_Child  =~ NA*c05_E1 + clambda0*c05_E1 + clambda1*c05_E2 + clambda2*c05_E3
+W7Extraversion_Child  =~ NA*c07_E1 + clambda0*c07_E1 + clambda1*c07_E2 + clambda2*c07_E3
+W10Extraversion_Child =~ NA*c10_E1 + clambda0*c10_E1 + clambda1*c10_E2 + clambda2*c10_E3
+W11Extraversion_Child =~ NA*c11_E1 + clambda0*c11_E1 + clambda1*c11_E2 + clambda2*c11_E3
+W12Extraversion_Child =~ NA*c12_E1 + clambda0*c12_E1 + clambda1*c12_E2 + clambda2*c12_E3
+W13Extraversion_Child =~ NA*c13_E1 + clambda0*c13_E1 + clambda1*c13_E2 + clambda2*c13_E3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Extraversion_Child  ~ 0
+W7Extraversion_Child  ~ 0
+W10Extraversion_Child ~ 0
+W11Extraversion_Child ~ 0
+W12Extraversion_Child ~ 0
+W13Extraversion_Child ~ 0
+
+# Latent Variable Variances
+W5Extraversion_Child  ~~ 1*W5Extraversion_Child
+W7Extraversion_Child  ~~ 1*W7Extraversion_Child
+W10Extraversion_Child ~~ 1*W10Extraversion_Child
+W11Extraversion_Child ~~ 1*W11Extraversion_Child
+W12Extraversion_Child ~~ 1*W12Extraversion_Child
+W13Extraversion_Child ~~ 1*W13Extraversion_Child
+
+
+#Parcel Intercepts
+c05_E1 ~ 1 #third highest subsequent residual error when constrained
+c05_E2 ~ 1 #Highest residual error variance when constrainedfreed in  Ringwald Et al.
+c05_E3 ~ 1 #Sixth freed intercept. ALso freed in Ringwald Et al.
+
+c07_E1 ~ 1 #fifth highest subsequent residual error. Also freed in  Ringwald Et al.
+c07_E2 ~ 1 #second highest  subsequent  residual error after freeing c05_E2
+c07_E3 ~ 1 #fourth highest subsequent residual error when constrained. freed in Ringwald Et al.
+
+c10_E1 ~ cintercept1*1
+c10_E2 ~ cintercept2*1
+c10_E3 ~ cintercept3*1
+
+c11_E1 ~ cintercept1*1
+c11_E2 ~ cintercept2*1
+c11_E3 ~ cintercept3*1
+
+c12_E1 ~ cintercept1*1
+c12_E2 ~ cintercept2*1
+c12_E3 ~ cintercept3*1
+
+c13_E1 ~ cintercept1*1
+c13_E2 ~ cintercept2*1
+c13_E3 ~ cintercept3*1
+
+# Parcel variances
+c05_E1 ~~ c05_E1
+c05_E2 ~~ c05_E2
+c05_E3 ~~ c05_E3
+
+c07_E1 ~~ c07_E1
+c07_E2 ~~ c07_E2
+c07_E3 ~~ c07_E3
+
+c10_E1 ~~ c10_E1
+c10_E2 ~~ c10_E2
+c10_E3 ~~ c10_E3
+
+c11_E1 ~~ c11_E1
+c11_E2 ~~ c11_E2
+c11_E3 ~~ c11_E3
+
+c12_E1 ~~ c12_E1
+c12_E2 ~~ c12_E2
+c12_E3 ~~ c12_E3
+
+c13_E1 ~~ c13_E1
+c13_E2 ~~ c13_E2
+c13_E3 ~~ c13_E3
+
+# Parcel residual covariances
+c05_E1 ~~ c07_E1 + c10_E1 + c11_E1 + c12_E1 + c13_E1
+c05_E2 ~~ c07_E2 + c10_E2 + c11_E2 + c12_E2 + c13_E2
+c05_E3 ~~ c07_E3 + c10_E3 + c11_E3 + c12_E3 + c13_E3
+
+c07_E1 ~~ c10_E1 + c11_E1 + c12_E1 + c13_E1
+c07_E2 ~~ c10_E2 + c11_E2 + c12_E2 + c13_E2
+c07_E3 ~~ c10_E3 + c11_E3 + c12_E3 + c13_E3
+
+c10_E1 ~~ c11_E1 + c12_E1 + c13_E1
+c10_E2 ~~ c11_E2 + c12_E2 + c13_E2
+c10_E3 ~~ c11_E3 + c12_E3 + c13_E3
+
+c11_E1 ~~ c12_E1 + c13_E1
+c11_E2 ~~ c12_E2 + c13_E2
+c11_E3 ~~ c12_E3 + c13_E3
+
+c12_E1 ~~ c13_E1
+c12_E2 ~~ c13_E2
+c12_E3 ~~ c13_E3
+
+##Univariate Growth Curve Stuff:
+ChildExtraversionIntercept =~ 1*W5Extraversion_Child+1*W7Extraversion_Child+1*W10Extraversion_Child+1*W11Extraversion_Child+1*W12Extraversion_Child+1*W13Extraversion_Child
+
+ChildExtraversionSlope =~ -0.569*W5Extraversion_Child+-0.364*W7Extraversion_Child+-0.059*W10Extraversion_Child+0.13*W11Extraversion_Child+0.274*W12Extraversion_Child+0.569*W13Extraversion_Child
+
+ChildExtraversionIntercept ~ 1
+ChildExtraversionSlope ~ 1
+
+ChildExtraversionIntercept ~~ ChildExtraversionIntercept
+ChildExtraversionSlope ~~ ChildExtraversionSlope
+ChildExtraversionIntercept ~~ ChildExtraversionSlope
+"
+
+fit.ChildUnivariateExtra <- growth(
+  model = Child_Univariate_Extraversion,
+  data = ZSCORED,
+  missing = "fiml",
+  parallel = "multicore"
+)
+summary(fit.ChildUnivariateExtra, fit.measures = T, std = T)
+standardizedSolution(fit.ChildUnivariateExtra)
+
+ 
+```
+
+#### MOM EXTRAVERSION UNIVARIATE FULL
+
+```{r}
+Mom_Univariate_Extraversion_Full <- " #----------------- MOM Univariate Full -----------
+#Latent Variables:
+W1Extraversion_Mom  =~ NA*m01_E1 + mlambda0*m01_E1 + mlambda1*m01_E2 + mlambda2*m01_E3
+W3Extraversion_Mom  =~ NA*m03_E1 + mlambda1*m03_E2 + mlambda2*m03_E3
+W5Extraversion_Mom  =~ NA*m05_E1 + mlambda1*m05_E2 + mlambda2*m05_E3
+W7Extraversion_Mom  =~ NA*m07_E1 + mlambda1*m07_E2 + m07_E3
+W10Extraversion_Mom =~ NA*m10_E1 + mlambda0*m10_E1 + mlambda1*m10_E2 + mlambda2*m10_E3
+W11Extraversion_Mom =~ NA*m11_E1 + mlambda0*m11_E1 + mlambda1*m11_E2 + mlambda2*m11_E3
+W12Extraversion_Mom =~ NA*m12_E1 + mlambda0*m12_E1 + mlambda1*m12_E2 + mlambda2*m12_E3
+W13Extraversion_Mom =~ NA*m13_E1 + mlambda0*m13_E1 + mlambda1*m13_E2 + mlambda2*m13_E3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Extraversion_Mom  ~ 0
+W3Extraversion_Mom  ~ 0
+W5Extraversion_Mom  ~ 0
+W7Extraversion_Mom  ~ 0
+W10Extraversion_Mom ~ 0
+W11Extraversion_Mom ~ 0
+W12Extraversion_Mom ~ 0
+W13Extraversion_Mom ~ 0
+
+# Latent Variable Variances
+W1Extraversion_Mom  ~~ 1*W1Extraversion_Mom
+W3Extraversion_Mom  ~~ 1*W3Extraversion_Mom
+W5Extraversion_Mom  ~~ 1*W5Extraversion_Mom
+W7Extraversion_Mom  ~~ 1*W7Extraversion_Mom
+W10Extraversion_Mom ~~ 1*W10Extraversion_Mom
+W11Extraversion_Mom ~~ 1*W11Extraversion_Mom
+W12Extraversion_Mom ~~ 1*W12Extraversion_Mom
+W13Extraversion_Mom ~~ 1*W13Extraversion_Mom
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+m01_E1 ~ 1
+m01_E2 ~ 1
+m01_E3 ~ 1
+
+m03_E1 ~ 1
+m03_E2 ~ 1
+m03_E3 ~ 1
+
+m05_E1 ~ mintercept1*1
+m05_E2 ~ 1
+m05_E3 ~ 1
+
+m07_E1 ~ mintercept1*1
+m07_E2 ~ 1
+m07_E3 ~ mintercept3*1
+
+m10_E1 ~ mintercept1*1
+m10_E2 ~ mintercept2*1
+m10_E3 ~ mintercept3*1
+
+m11_E1 ~ mintercept1*1
+m11_E2 ~ mintercept2*1
+m11_E3 ~ mintercept3*1
+
+m12_E1 ~ mintercept1*1
+m12_E2 ~ mintercept2*1
+m12_E3 ~ mintercept3*1
+
+m13_E1 ~ mintercept1*1
+m13_E2 ~ mintercept2*1
+m13_E3 ~ mintercept3*1
+
+# Parcel variances
+m01_E1 ~~ m01_E1
+m01_E2 ~~ m01_E2
+m01_E3 ~~ m01_E3
+
+m03_E1 ~~ m03_E1
+m03_E2 ~~ m03_E2
+m03_E3 ~~ m03_E3
+
+m05_E1 ~~ m05_E1
+m05_E2 ~~ m05_E2
+m05_E3 ~~ m05_E3
+
+m07_E1 ~~ m07_E1
+m07_E2 ~~ m07_E2
+m07_E3 ~~ m07_E3
+
+m10_E1 ~~ m10_E1
+m10_E2 ~~ m10_E2
+m10_E3 ~~ m10_E3
+
+m11_E1 ~~ m11_E1
+m11_E2 ~~ m11_E2
+m11_E3 ~~ m11_E3
+
+m12_E1 ~~ m12_E1
+m12_E2 ~~ m12_E2
+m12_E3 ~~ m12_E3
+
+m13_E1 ~~ m13_E1
+m13_E2 ~~ m13_E2
+m13_E3 ~~ m13_E3
+
+# Parcel residual covariances
+m01_E1 ~~ m03_E1 + m05_E1 + m07_E1 + m10_E1 + m11_E1 + m12_E1 + m13_E1
+m01_E2 ~~ m03_E2 + m05_E2 + m07_E2 + m10_E2 + m11_E2 + m12_E2 + m13_E2
+m01_E3 ~~ m03_E3 + m05_E3 + m07_E3 + m10_E3 + m11_E3 + m12_E3 + m13_E3
+
+m03_E1 ~~ m05_E1 + m07_E1 + m10_E1 + m11_E1 + m12_E1 + m13_E1
+m03_E2 ~~ m05_E2 + m07_E2 + m10_E2 + m11_E2 + m12_E2 + m13_E2
+m03_E3 ~~ m05_E3 + m07_E3 + m10_E3 + m11_E3 + m12_E3 + m13_E3
+
+m05_E1 ~~ m07_E1 + m10_E1 + m11_E1 + m12_E1 + m13_E1
+m05_E2 ~~ m07_E2 + m10_E2 + m11_E2 + m12_E2 + m13_E2
+m05_E3 ~~ m07_E3 + m10_E3 + m11_E3 + m12_E3 + m13_E3
+
+m07_E1 ~~ m10_E1 + m11_E1 + m12_E1 + m13_E1
+m07_E2 ~~ m10_E2 + m11_E2 + m12_E2 + m13_E2
+m07_E3 ~~ m10_E3 + m11_E3 + m12_E3 + m13_E3
+
+m10_E1 ~~ m11_E1 + m12_E1 + m13_E1
+m10_E2 ~~ m11_E2 + m12_E2 + m13_E2
+m10_E3 ~~ m11_E3 + m12_E3 + m13_E3
+
+m11_E1 ~~ m12_E1 + m13_E1
+m11_E2 ~~ m12_E2 + m13_E2
+m11_E3 ~~ m12_E3 + m13_E3
+
+m12_E1 ~~ m13_E1
+m12_E2 ~~ m13_E2
+m12_E3 ~~ m13_E3
+
+##Univariate Growth Curve Stuff:
+MomExtraversionIntercept =~ 1*W1Extraversion_Mom+1*W3Extraversion_Mom+1*W5Extraversion_Mom+1*W7Extraversion_Mom+1*W10Extraversion_Mom+1*W11Extraversion_Mom+1*W12Extraversion_Mom+1*W13Extraversion_Mom
+
+MomExtraversionSlope =~ -0.764*W1Extraversion_Mom+-0.569*W3Extraversion_Mom+-0.374*W5Extraversion_Mom+-0.17*W7Extraversion_Mom+0.136*W10Extraversion_Mom+0.324*W11Extraversion_Mom+0.468*W12Extraversion_Mom+0.764*W13Extraversion_Mom
+
+MomExtraversionIntercept ~ 0*1
+MomExtraversionSlope ~ 1
+
+MomExtraversionIntercept ~~ MomExtraversionIntercept
+MomExtraversionSlope ~~ MomExtraversionSlope
+MomExtraversionIntercept ~~ MomExtraversionSlope
+"
+```
+
+#### DAD EXTRAVERSION UNIVARIATE FULL
+
+```{r}
+Dad_Extraversion_Univariate_Full <- "## ----------------- DAD UNIVARIATE FULL ------------
+#Latent Variables:
+W1Extraversion_Dad  =~ NA*d01_E1 + dlambda0*d01_E1 + dlambda1*d01_E2 + dlambda2*d01_E3
+W3Extraversion_Dad  =~ NA*d03_E1 + dlambda0*d03_E1 + dlambda1*d03_E2 + dlambda2*d03_E3
+W5Extraversion_Dad  =~ NA*d05_E1 + dlambda0*d05_E1 + dlambda1*d05_E2 + dlambda2*d05_E3
+W7Extraversion_Dad  =~ NA*d07_E1 + dlambda0*d07_E1 + dlambda1*d07_E2 + dlambda2*d07_E3
+W11Extraversion_Dad =~ NA*d11_E1 + dlambda0*d11_E1 + dlambda1*d11_E2 + dlambda2*d11_E3
+W12Extraversion_Dad =~ NA*d12_E1 + dlambda0*d12_E1 + dlambda1*d12_E2 + dlambda2*d12_E3
+W13Extraversion_Dad =~ NA*d13_E1 + dlambda0*d13_E1 + dlambda1*d13_E2 + dlambda2*d13_E3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Extraversion_Dad  ~ 0
+W3Extraversion_Dad  ~ 0
+W5Extraversion_Dad  ~ 0
+W7Extraversion_Dad  ~ 0
+W11Extraversion_Dad ~ 0
+W12Extraversion_Dad ~ 0
+W13Extraversion_Dad ~ 0
+
+# Latent Variable Variances
+W1Extraversion_Dad  ~~ 1*W1Extraversion_Dad
+W3Extraversion_Dad  ~~ 1*W3Extraversion_Dad
+W5Extraversion_Dad  ~~ 1*W5Extraversion_Dad
+W7Extraversion_Dad  ~~ 1*W7Extraversion_Dad
+W11Extraversion_Dad ~~ 1*W11Extraversion_Dad
+W12Extraversion_Dad ~~ 1*W12Extraversion_Dad
+W13Extraversion_Dad ~~ 1*W13Extraversion_Dad
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+d01_E1 ~ 1
+d01_E2 ~ 1
+d01_E3 ~ 1
+
+d03_E1 ~ 1
+d03_E2 ~ 1
+d03_E3 ~ 1
+
+d05_E1 ~ dintercept1*1
+d05_E2 ~ 1
+d05_E3 ~ 1
+
+d07_E1 ~ dintercept1*1
+d07_E2 ~ 1
+d07_E3 ~ 1
+
+d11_E1 ~ dintercept1*1
+d11_E2 ~ dintercept2*1
+d11_E3 ~ dintercept3*1
+
+d12_E1 ~ dintercept1*1
+d12_E2 ~ dintercept2*1
+d12_E3 ~ dintercept3*1
+
+d13_E1 ~ dintercept1*1
+d13_E2 ~ dintercept2*1
+d13_E3 ~ dintercept3*1
+
+# Parcel variances
+d01_E1 ~~ d01_E1
+d01_E2 ~~ d01_E2
+d01_E3 ~~ d01_E3
+
+d03_E1 ~~ d03_E1
+d03_E2 ~~ d03_E2
+d03_E3 ~~ d03_E3
+
+d05_E1 ~~ d05_E1
+d05_E2 ~~ d05_E2
+d05_E3 ~~ d05_E3
+
+d07_E1 ~~ d07_E1
+d07_E2 ~~ d07_E2
+d07_E3 ~~ d07_E3
+
+
+d11_E1 ~~ d11_E1
+d11_E2 ~~ d11_E2
+d11_E3 ~~ d11_E3
+
+d12_E1 ~~ d12_E1
+d12_E2 ~~ d12_E2
+d12_E3 ~~ d12_E3
+
+d13_E1 ~~ d13_E1
+d13_E2 ~~ d13_E2
+d13_E3 ~~ d13_E3
+
+# Parcel residual covariances
+d01_E1 ~~ d03_E1 + d05_E1 + d07_E1 + d11_E1 + d12_E1 + d13_E1
+d01_E2 ~~ d03_E2 + d05_E2 + d07_E2 + d11_E2 + d12_E2 + d13_E2
+d01_E3 ~~ d03_E3 + d05_E3 + d07_E3 + d11_E3 + d12_E3 + d13_E3
+
+d03_E1 ~~ d05_E1 + d07_E1 + d11_E1 + d12_E1 + d13_E1
+d03_E2 ~~ d05_E2 + d07_E2 + d11_E2 + d12_E2 + d13_E2
+d03_E3 ~~ d05_E3 + d07_E3 + d11_E3 + d12_E3 + d13_E3
+
+d05_E1 ~~ d07_E1 + d11_E1 + d12_E1 + d13_E1
+d05_E2 ~~ d07_E2 + d11_E2 + d12_E2 + d13_E2
+d05_E3 ~~ d07_E3 + d11_E3 + d12_E3 + d13_E3
+
+d07_E1 ~~ d11_E1 + d12_E1 + d13_E1
+d07_E2 ~~ d11_E2 + d12_E2 + d13_E2
+d07_E3 ~~ d11_E3 + d12_E3 + d13_E3
+
+
+d11_E1 ~~ d12_E1 + d13_E1
+d11_E2 ~~ d12_E2 + d13_E2
+d11_E3 ~~ d12_E3 + d13_E3
+
+d12_E1 ~~ d13_E1
+d12_E2 ~~ d13_E2
+d12_E3 ~~ d13_E3
+
+##Univariate Growth Curve Stuff:
+DadExtraversionIntercept =~ 1*W1Extraversion_Dad+1*W3Extraversion_Dad+1*W5Extraversion_Dad+1*W7Extraversion_Dad+1*W11Extraversion_Dad+1*W12Extraversion_Dad+1*W13Extraversion_Dad
+
+DadExtraversionSlope =~ -0.764*W1Extraversion_Dad+-0.569*W3Extraversion_Dad+-0.374*W5Extraversion_Dad+-0.17*W7Extraversion_Dad+0.324*W11Extraversion_Dad+0.468*W12Extraversion_Dad+0.764*W13Extraversion_Dad
+
+
+DadExtraversionIntercept ~ 0*1
+DadExtraversionSlope ~ 1
+
+DadExtraversionIntercept ~~ DadExtraversionIntercept
+DadExtraversionSlope ~~ DadExtraversionSlope
+DadExtraversionIntercept ~~ DadExtraversionSlope
+"
+```
+
+### Strictly Overlapping Models:
+
+##### MOM EXTRAVERSION UNIVARIATE Overlap
+
+```{r}
+Mom_Univariate_Extraversion_Overlap <- " #----------------- MOM Univariate OVERLAP -----------
+#Latent Variables:
+W5Extraversion_Mom  =~ NA*m05_E1 + mlambda1*m05_E2 + mlambda2*m05_E3
+W7Extraversion_Mom  =~ NA*m07_E1 + mlambda1*m07_E2 + mlambda2*m07_E3
+W10Extraversion_Mom =~ NA*m10_E1 + mlambda0*m10_E1 + mlambda1*m10_E2 + mlambda2*m10_E3
+W11Extraversion_Mom =~ NA*m11_E1 + mlambda0*m11_E1 + mlambda1*m11_E2 + mlambda2*m11_E3
+W12Extraversion_Mom =~ NA*m12_E1 + mlambda0*m12_E1 + mlambda1*m12_E2 + mlambda2*m12_E3
+W13Extraversion_Mom =~ NA*m13_E1 + mlambda0*m13_E1 + mlambda1*m13_E2 + mlambda2*m13_E3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Extraversion_Mom  ~ 0
+W7Extraversion_Mom  ~ 0
+W10Extraversion_Mom ~ 0
+W11Extraversion_Mom ~ 0
+W12Extraversion_Mom ~ 0
+W13Extraversion_Mom ~ 0
+
+# Latent Variable Variances
+W5Extraversion_Mom  ~~ 1*W5Extraversion_Mom
+W7Extraversion_Mom  ~~ 1*W7Extraversion_Mom
+W10Extraversion_Mom ~~ 1*W10Extraversion_Mom
+W11Extraversion_Mom ~~ 1*W11Extraversion_Mom
+W12Extraversion_Mom ~~ 1*W12Extraversion_Mom
+W13Extraversion_Mom ~~ 1*W13Extraversion_Mom
+
+#Parcel Intercepts
+
+m05_E1 ~ mintercept1*1
+m05_E2 ~ 1
+m05_E3 ~ mintercept3*1
+
+m07_E1 ~ mintercept1*1
+m07_E2 ~ 1
+m07_E3 ~ mintercept3*1
+
+m10_E1 ~ mintercept1*1
+m10_E2 ~ mintercept2*1
+m10_E3 ~ mintercept3*1
+
+m11_E1 ~ mintercept1*1
+m11_E2 ~ mintercept2*1
+m11_E3 ~ mintercept3*1
+
+m12_E1 ~ mintercept1*1
+m12_E2 ~ mintercept2*1
+m12_E3 ~ mintercept3*1
+
+m13_E1 ~ mintercept1*1
+m13_E2 ~ mintercept2*1
+m13_E3 ~ mintercept3*1
+
+# Parcel variances
+
+m05_E1 ~~ m05_E1
+m05_E2 ~~ m05_E2
+m05_E3 ~~ m05_E3
+
+m07_E1 ~~ m07_E1
+m07_E2 ~~ m07_E2
+m07_E3 ~~ m07_E3
+
+m10_E1 ~~ m10_E1
+m10_E2 ~~ m10_E2
+m10_E3 ~~ m10_E3
+
+m11_E1 ~~ m11_E1
+m11_E2 ~~ m11_E2
+m11_E3 ~~ m11_E3
+
+m12_E1 ~~ m12_E1
+m12_E2 ~~ m12_E2
+m12_E3 ~~ m12_E3
+
+m13_E1 ~~ m13_E1
+m13_E2 ~~ m13_E2
+m13_E3 ~~ m13_E3
+
+# Parcel residual covariances
+m05_E1 ~~ m07_E1 + m10_E1 + m11_E1 + m12_E1 + m13_E1
+m05_E2 ~~ m07_E2 + m10_E2 + m11_E2 + m12_E2 + m13_E2
+m05_E3 ~~ m07_E3 + m10_E3 + m11_E3 + m12_E3 + m13_E3
+
+m07_E1 ~~ m10_E1 + m11_E1 + m12_E1 + m13_E1
+m07_E2 ~~ m10_E2 + m11_E2 + m12_E2 + m13_E2
+m07_E3 ~~ m10_E3 + m11_E3 + m12_E3 + m13_E3
+
+m10_E1 ~~ m11_E1 + m12_E1 + m13_E1
+m10_E2 ~~ m11_E2 + m12_E2 + m13_E2
+m10_E3 ~~ m11_E3 + m12_E3 + m13_E3
+
+m11_E1 ~~ m12_E1 + m13_E1
+m11_E2 ~~ m12_E2 + m13_E2
+m11_E3 ~~ m12_E3 + m13_E3
+
+m12_E1 ~~ m13_E1
+m12_E2 ~~ m13_E2
+m12_E3 ~~ m13_E3
+
+##Univariate Growth Curve Stuff:
+MomExtraversionIntercept =~ W5Extraversion_Mom+1*W7Extraversion_Mom+1*W10Extraversion_Mom+1*W11Extraversion_Mom+1*W12Extraversion_Mom+1*W13Extraversion_Mom
+
+MomExtraversionSlope =~ -0.569*W5Extraversion_Mom+-0.364*W7Extraversion_Mom+-0.059*W10Extraversion_Mom+0.13*W11Extraversion_Mom+0.274*W12Extraversion_Mom+0.569*W13Extraversion_Mom
+
+MomExtraversionIntercept ~ 0*1
+MomExtraversionSlope ~ 1
+
+MomExtraversionIntercept ~~ MomExtraversionIntercept
+MomExtraversionSlope ~~ MomExtraversionSlope
+MomExtraversionIntercept ~~ MomExtraversionSlope
+"
+# fit.MomUnivariateExtraversionOverlap = growth(model = Mom_Univariate_Extraversion_Overlap,
+#                         data = ZSCORED,
+#                         missing = "fiml",
+#                         parallel="multicore")
+
+# summary(fit.MomUnivariateExtraversionOverlap, fit.measures=T,std=T)
+```
+
+##### DAD EXTRAVERSION UNIVARIATE Overlap
+
+```{r}
+Dad_Univariate_Extraversion_Overlap <- " #---------- Dad Uni Extra Overlap -----------
+#Latent Variables:
+W5Extraversion_Dad  =~ NA*d05_E1 + dlambda0*d05_E1 + dlambda1*d05_E2 + dlambda2*d05_E3
+W7Extraversion_Dad  =~ NA*d07_E1 + dlambda0*d07_E1 + dlambda1*d07_E2 + d07_E3
+W11Extraversion_Dad =~ NA*d11_E1 + dlambda0*d11_E1 + dlambda1*d11_E2 + dlambda2*d11_E3
+W12Extraversion_Dad =~ NA*d12_E1 + dlambda0*d12_E1 + dlambda1*d12_E2 + dlambda2*d12_E3
+W13Extraversion_Dad =~ NA*d13_E1 + dlambda0*d13_E1 + dlambda1*d13_E2 + dlambda2*d13_E3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Extraversion_Dad  ~ 0
+W7Extraversion_Dad  ~ 0
+W11Extraversion_Dad ~ 0
+W12Extraversion_Dad ~ 0
+W13Extraversion_Dad ~ 0
+
+# Latent Variable Variances
+W5Extraversion_Dad  ~~ 1*W5Extraversion_Dad
+W7Extraversion_Dad  ~~ 1*W7Extraversion_Dad
+W11Extraversion_Dad ~~ 1*W11Extraversion_Dad
+W12Extraversion_Dad ~~ 1*W12Extraversion_Dad
+W13Extraversion_Dad ~~ 1*W13Extraversion_Dad
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+
+d05_E1 ~ 1
+d05_E2 ~ 1
+d05_E3 ~ 1
+
+d07_E1 ~ 1
+d07_E2 ~ 1
+d07_E3 ~ 1
+
+d11_E1 ~ dintercept1*1
+d11_E2 ~ dintercept2*1
+d11_E3 ~ 1
+
+d12_E1 ~ dintercept1*1
+d12_E2 ~ dintercept2*1
+d12_E3 ~ dintercept3*1
+
+d13_E1 ~ dintercept1*1
+d13_E2 ~ 1
+d13_E3 ~ dintercept3*1
+
+# Parcel variances
+d05_E1 ~~ d05_E1
+d05_E2 ~~ d05_E2
+d05_E3 ~~ d05_E3
+
+d07_E1 ~~ d07_E1
+d07_E2 ~~ d07_E2
+d07_E3 ~~ d07_E3
+
+
+d11_E1 ~~ d11_E1
+d11_E2 ~~ d11_E2
+d11_E3 ~~ d11_E3
+
+d12_E1 ~~ d12_E1
+d12_E2 ~~ d12_E2
+d12_E3 ~~ d12_E3
+
+d13_E1 ~~ d13_E1
+d13_E2 ~~ d13_E2
+d13_E3 ~~ d13_E3
+
+# Parcel residual covariances
+d05_E1 ~~ d07_E1 + d11_E1 + d12_E1 + d13_E1
+d05_E2 ~~ d07_E2 + d11_E2 + d12_E2 + d13_E2
+d05_E3 ~~ d07_E3 + d11_E3 + d12_E3 + d13_E3
+
+d07_E1 ~~ d11_E1 + d12_E1 + d13_E1
+d07_E2 ~~ d11_E2 + d12_E2 + d13_E2
+d07_E3 ~~ d11_E3 + d12_E3 + d13_E3
+
+d11_E1 ~~ d12_E1 + d13_E1
+d11_E2 ~~ d12_E2 + d13_E2
+d11_E3 ~~ d12_E3 + d13_E3
+
+d12_E1 ~~ d13_E1
+d12_E2 ~~ d13_E2
+d12_E3 ~~ d13_E3
+
+##Univariate Growth Curve Stuff:
+DadExtraversionIntercept =~ 1*W5Extraversion_Dad+1*W7Extraversion_Dad+1*W11Extraversion_Dad+1*W12Extraversion_Dad+1*W13Extraversion_Dad
+
+DadExtraversionSlope =~ -0.569*W5Extraversion_Dad+-0.364*W7Extraversion_Dad+0.13*W11Extraversion_Dad+0.274*W12Extraversion_Dad+0.569*W13Extraversion_Dad
+
+
+DadExtraversionIntercept ~ 0*1
+DadExtraversionSlope ~ 1
+
+DadExtraversionIntercept ~~ DadExtraversionIntercept
+DadExtraversionSlope ~~ DadExtraversionSlope
+DadExtraversionIntercept ~~ DadExtraversionSlope
+"
+```
+
+## -------- AGREEABLENESS --------
+
+### Full Trajectory Models:
+
+#### CHILD AGREEABLENESS UNIVARIATE
+
+```{r}
+Child_Univariate_Agreeableness <- "#-------------------- ChildPartialStrongAgreeableness --------------------
+
+#Latent Variables:
+W5Agreeableness_Child  =~ NA*c05_A1 + clambda0*c05_A1 + clambda1*c05_A2 + clambda2*c05_A3
+W7Agreeableness_Child  =~ NA*c07_A1 + clambda0*c07_A1 + clambda1*c07_A2 + clambda2*c07_A3
+W10Agreeableness_Child =~ NA*c10_A1 + clambda0*c10_A1 + clambda1*c10_A2 + clambda2*c10_A3
+W11Agreeableness_Child =~ NA*c11_A1 + clambda0*c11_A1 + clambda1*c11_A2 + clambda2*c11_A3
+W12Agreeableness_Child =~ NA*c12_A1 + clambda0*c12_A1 + clambda1*c12_A2 + clambda2*c12_A3
+W13Agreeableness_Child =~ NA*c13_A1 + clambda0*c13_A1 + clambda1*c13_A2 + clambda2*c13_A3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Agreeableness_Child  ~ 0
+W7Agreeableness_Child  ~ 0
+W10Agreeableness_Child ~ 0
+W11Agreeableness_Child ~ 0
+W12Agreeableness_Child ~ 0
+W13Agreeableness_Child ~ 0
+
+# Latent Variable Variances
+W5Agreeableness_Child  ~~ 1*W5Agreeableness_Child
+W7Agreeableness_Child  ~~ 1*W7Agreeableness_Child
+W10Agreeableness_Child ~~ 1*W10Agreeableness_Child
+W11Agreeableness_Child ~~ 1*W11Agreeableness_Child
+W12Agreeableness_Child ~~ 1*W12Agreeableness_Child
+W13Agreeableness_Child ~~ 1*W13Agreeableness_Child
+
+
+#Parcel Intercepts
+c05_A1 ~ 1
+c05_A2 ~ 1
+c05_A3 ~ 1
+
+c07_A1 ~ 1
+c07_A2 ~ 1
+c07_A3 ~ 1
+
+
+c10_A1 ~ 1
+c10_A2 ~ cintercept2*1
+c10_A3 ~ 1
+
+c11_A1 ~ cintercept1*1
+c11_A2 ~ cintercept2*1
+c11_A3 ~ 1
+
+c12_A1 ~ cintercept1*1
+c12_A2 ~ 1
+c12_A3 ~ 1
+
+c13_A1 ~ 1
+c13_A2 ~ cintercept2*1
+c13_A3 ~ 1
+
+# Parcel variances
+c05_A1 ~~ c05_A1
+c05_A2 ~~ c05_A2
+c05_A3 ~~ c05_A3
+
+c07_A1 ~~ c07_A1
+c07_A2 ~~ c07_A2
+c07_A3 ~~ c07_A3
+
+c10_A1 ~~ c10_A1
+c10_A2 ~~ c10_A2
+c10_A3 ~~ c10_A3
+
+c11_A1 ~~ c11_A1
+c11_A2 ~~ c11_A2
+c11_A3 ~~ c11_A3
+
+c12_A1 ~~ c12_A1
+c12_A2 ~~ c12_A2
+c12_A3 ~~ c12_A3
+
+c13_A1 ~~ c13_A1
+c13_A2 ~~ c13_A2
+c13_A3 ~~ c13_A3
+
+
+# Parcel residual covariances
+c05_A1 ~~ c07_A1 + c10_A1 + c11_A1 + c12_A1 + c13_A1
+c05_A2 ~~ c07_A2 + c10_A2 + c11_A2 + c12_A2 + c13_A2
+c05_A3 ~~ c07_A3 + c10_A3 + c11_A3 + c12_A3 + c13_A3
+
+c07_A1 ~~ c10_A1 + c11_A1 + c12_A1 + c13_A1
+c07_A2 ~~ c10_A2 + c11_A2 + c12_A2 + c13_A2
+c07_A3 ~~ c10_A3 + c11_A3 + c12_A3 + c13_A3
+
+c10_A1 ~~ c11_A1 + c12_A1 + c13_A1
+c10_A2 ~~ c11_A2 + c12_A2 + c13_A2
+c10_A3 ~~ c11_A3 + c12_A3 + c13_A3
+
+c11_A1 ~~ c12_A1 + c13_A1
+c11_A2 ~~ c12_A2 + c13_A2
+c11_A3 ~~ c12_A3 + c13_A3
+
+c12_A1 ~~ c13_A1
+c12_A2 ~~ c13_A2
+c12_A3 ~~ c13_A3
+
+
+##Univariate Growth Curve Stuff:
+ChildAgreeablenessIntercept =~ 1*W5Agreeableness_Child+1*W7Agreeableness_Child+1*W10Agreeableness_Child+1*W11Agreeableness_Child+1*W12Agreeableness_Child+1*W13Agreeableness_Child
+
+ChildAgreeablenessSlope =~ -0.569*W5Agreeableness_Child+-0.364*W7Agreeableness_Child+-0.059*W10Agreeableness_Child+0.13*W11Agreeableness_Child+0.274*W12Agreeableness_Child+0.569*W13Agreeableness_Child
+
+ChildAgreeablenessIntercept ~ 0*1
+ChildAgreeablenessSlope ~ 1
+
+ChildAgreeablenessIntercept ~~ ChildAgreeablenessIntercept
+ChildAgreeablenessSlope ~~ ChildAgreeablenessSlope
+ChildAgreeablenessIntercept ~~ ChildAgreeablenessSlope
+"
+```
+
+#### MOM AGREEABLENESS UNIVARIATE
+
+```{r}
+Mom_Univariate_Agreeableness_Full <- " #----------------- MOM Univariate Full AGREE -----------
+
+#Latent Variables:
+W1Agreeableness_Mom  =~ NA*m01_A1 + mlambda0*m01_A1 + mlambda1*m01_A2 + mlambda2*m01_A3
+W3Agreeableness_Mom  =~ NA*m03_A1 + mlambda0*m03_A1 + mlambda1*m03_A2 + mlambda2*m03_A3
+W5Agreeableness_Mom  =~ NA*m05_A1 + mlambda0*m05_A1 + mlambda1*m05_A2 + mlambda2*m05_A3
+W7Agreeableness_Mom  =~ NA*m07_A1 + mlambda0*m07_A1 + mlambda1*m07_A2 + mlambda2*m07_A3
+W10Agreeableness_Mom =~ NA*m10_A1 + mlambda0*m10_A1 + mlambda1*m10_A2 + mlambda2*m10_A3
+W11Agreeableness_Mom =~ NA*m11_A1 + mlambda0*m11_A1 + mlambda1*m11_A2 + mlambda2*m11_A3
+W12Agreeableness_Mom =~ NA*m12_A1 + mlambda0*m12_A1 + mlambda1*m12_A2 + mlambda2*m12_A3
+W13Agreeableness_Mom =~ NA*m13_A1 + mlambda0*m13_A1 + mlambda1*m13_A2 + mlambda2*m13_A3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Agreeableness_Mom  ~ 0
+W3Agreeableness_Mom  ~ 0
+W5Agreeableness_Mom  ~ 0
+W7Agreeableness_Mom  ~ 0
+W10Agreeableness_Mom ~ 0
+W11Agreeableness_Mom ~ 0
+W12Agreeableness_Mom ~ 0
+W13Agreeableness_Mom ~ 0
+
+# Latent Variable Variances
+W1Agreeableness_Mom  ~~ 1*W1Agreeableness_Mom
+W3Agreeableness_Mom  ~~ 1*W3Agreeableness_Mom
+W5Agreeableness_Mom  ~~ 1*W5Agreeableness_Mom
+W7Agreeableness_Mom  ~~ 1*W7Agreeableness_Mom
+W10Agreeableness_Mom ~~ 1*W10Agreeableness_Mom
+W11Agreeableness_Mom ~~ 1*W11Agreeableness_Mom
+W12Agreeableness_Mom ~~ 1*W12Agreeableness_Mom
+W13Agreeableness_Mom ~~ 1*W13Agreeableness_Mom
+
+#Parcel Intercepts
+m01_A1 ~ 1
+m01_A2 ~ 1
+m01_A3 ~ 1
+
+m03_A1 ~ 1
+m03_A2 ~ 1
+m03_A3 ~ 1
+
+m05_A1 ~ 1
+m05_A2 ~ 1
+m05_A3 ~ 1
+
+m07_A1 ~ 1
+m07_A2 ~ 1
+m07_A3 ~ mintercept3*1
+
+m10_A1 ~ mintercept1*1
+m10_A2 ~ mintercept2*1
+m10_A3 ~ 1
+
+m11_A1 ~ mintercept1*1
+m11_A2 ~ mintercept2*1
+m11_A3 ~ 1
+
+m12_A1 ~ mintercept1*1
+m12_A2 ~ mintercept2*1
+m12_A3 ~ 1
+
+m13_A1 ~ 1
+m13_A2 ~ mintercept2*1
+m13_A3 ~ 1
+
+# Parcel variances
+m01_A1 ~~ m01_A1
+m01_A2 ~~ m01_A2
+m01_A3 ~~ m01_A3
+
+m03_A1 ~~ m03_A1
+m03_A2 ~~ m03_A2
+m03_A3 ~~ m03_A3
+
+m05_A1 ~~ m05_A1
+m05_A2 ~~ m05_A2
+m05_A3 ~~ m05_A3
+
+m07_A1 ~~ m07_A1
+m07_A2 ~~ m07_A2
+m07_A3 ~~ m07_A3
+
+m10_A1 ~~ m10_A1
+m10_A2 ~~ m10_A2
+m10_A3 ~~ m10_A3
+
+m11_A1 ~~ m11_A1
+m11_A2 ~~ m11_A2
+m11_A3 ~~ m11_A3
+
+m12_A1 ~~ m12_A1
+m12_A2 ~~ m12_A2
+m12_A3 ~~ m12_A3
+
+m13_A1 ~~ m13_A1
+m13_A2 ~~ m13_A2
+m13_A3 ~~ m13_A3
+
+# Parcel residual covariances
+m01_A1 ~~ m03_A1 + m05_A1 + m07_A1 + m10_A1 + m11_A1 + m12_A1 + m13_A1
+m01_A2 ~~ m03_A2 + m05_A2 + m07_A2 + m10_A2 + m11_A2 + m12_A2 + m13_A2
+m01_A3 ~~ m03_A3 + m05_A3 + m07_A3 + m10_A3 + m11_A3 + m12_A3 + m13_A3
+
+m03_A1 ~~ m05_A1 + m07_A1 + m10_A1 + m11_A1 + m12_A1 + m13_A1
+m03_A2 ~~ m05_A2 + m07_A2 + m10_A2 + m11_A2 + m12_A2 + m13_A2
+m03_A3 ~~ m05_A3 + m07_A3 + m10_A3 + m11_A3 + m12_A3 + m13_A3
+
+m05_A1 ~~ m07_A1 + m10_A1 + m11_A1 + m12_A1 + m13_A1
+m05_A2 ~~ m07_A2 + m10_A2 + m11_A2 + m12_A2 + m13_A2
+m05_A3 ~~ m07_A3 + m10_A3 + m11_A3 + m12_A3 + m13_A3
+
+m07_A1 ~~ m10_A1 + m11_A1 + m12_A1 + m13_A1
+m07_A2 ~~ m10_A2 + m11_A2 + m12_A2 + m13_A2
+m07_A3 ~~ m10_A3 + m11_A3 + m12_A3 + m13_A3
+
+m10_A1 ~~ m11_A1 + m12_A1 + m13_A1
+m10_A2 ~~ m11_A2 + m12_A2 + m13_A2
+m10_A3 ~~ m11_A3 + m12_A3 + m13_A3
+
+m11_A1 ~~ m12_A1 + m13_A1
+m11_A2 ~~ m12_A2 + m13_A2
+m11_A3 ~~ m12_A3 + m13_A3
+
+m12_A1 ~~ m13_A1
+m12_A2 ~~ m13_A2
+m12_A3 ~~ m13_A3
+
+##Univariate Growth Curve Stuff:
+MomAgreeablenessIntercept =~ 1*W1Agreeableness_Mom+1*W3Agreeableness_Mom+1*W5Agreeableness_Mom+1*W7Agreeableness_Mom+1*W10Agreeableness_Mom+1*W11Agreeableness_Mom+1*W12Agreeableness_Mom+1*W13Agreeableness_Mom
+
+MomAgreeablenessSlope =~ -0.764*W1Agreeableness_Mom+-0.569*W3Agreeableness_Mom+-0.374*W5Agreeableness_Mom+-0.17*W7Agreeableness_Mom+0.136*W10Agreeableness_Mom+0.324*W11Agreeableness_Mom+0.468*W12Agreeableness_Mom+0.764*W13Agreeableness_Mom
+
+MomAgreeablenessIntercept ~ 0*1
+MomAgreeablenessSlope ~ 1
+
+MomAgreeablenessIntercept ~~ MomAgreeablenessIntercept
+MomAgreeablenessSlope ~~ MomAgreeablenessSlope
+MomAgreeablenessIntercept ~~ MomAgreeablenessSlope
+"
+```
+
+#### DAD AGREEABLENESS UNIVARIATE
+
+```{r}
+Dad_Agreeableness_Univariate_Full <- "## ----------------- DAD UNIVARIATE FULL ------------
+#Latent Variables:
+W1Agreeableness_Dad  =~ NA*d01_A1 + dlambda0*d01_A1 + dlambda1*d01_A2 + dlambda2*d01_A3
+W3Agreeableness_Dad  =~ NA*d03_A1 + dlambda0*d03_A1 + dlambda1*d03_A2 + dlambda2*d03_A3
+W5Agreeableness_Dad  =~ NA*d05_A1 + dlambda0*d05_A1 + dlambda1*d05_A2 + dlambda2*d05_A3
+W7Agreeableness_Dad  =~ NA*d07_A1 + dlambda1*d07_A2 + dlambda2*d07_A3
+W11Agreeableness_Dad =~ NA*d11_A1 + dlambda0*d11_A1 + dlambda1*d11_A2 + dlambda2*d11_A3
+W12Agreeableness_Dad =~ NA*d12_A1 + dlambda0*d12_A1 + dlambda1*d12_A2 + dlambda2*d12_A3
+W13Agreeableness_Dad =~ NA*d13_A1 + dlambda0*d13_A1 + dlambda1*d13_A2 + dlambda2*d13_A3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Agreeableness_Dad  ~ 0
+W3Agreeableness_Dad  ~ 0
+W5Agreeableness_Dad  ~ 0
+W7Agreeableness_Dad  ~ 0
+W11Agreeableness_Dad ~ 0
+W12Agreeableness_Dad ~ 0
+W13Agreeableness_Dad ~ 0
+
+# Latent Variable Variances
+W1Agreeableness_Dad  ~~ 1*W1Agreeableness_Dad
+W3Agreeableness_Dad  ~~ 1*W3Agreeableness_Dad
+W5Agreeableness_Dad  ~~ 1*W5Agreeableness_Dad
+W7Agreeableness_Dad  ~~ 1*W7Agreeableness_Dad
+W11Agreeableness_Dad ~~ 1*W11Agreeableness_Dad
+W12Agreeableness_Dad ~~ 1*W12Agreeableness_Dad
+W13Agreeableness_Dad ~~ 1*W13Agreeableness_Dad
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+d01_A1 ~ 1
+d01_A2 ~ 1
+d01_A3 ~ dintercept3*1
+
+d03_A1 ~ 1
+d03_A2 ~ 1
+d03_A3 ~ 1
+
+d05_A1 ~ dintercept1*1
+d05_A2 ~ 1
+d05_A3 ~ 1
+
+d07_A1 ~ 1
+d07_A2 ~ 1
+d07_A3 ~ 1
+
+d11_A1 ~ 1
+d11_A2 ~ dintercept2*1
+d11_A3 ~ 1
+
+d12_A1 ~ 1
+d12_A2 ~ dintercept2*1
+d12_A3 ~ 1
+
+d13_A1 ~ 1
+d13_A2 ~ dintercept2*1
+d13_A3 ~ 1
+
+# Parcel variances
+d01_A1 ~~ d01_A1
+d01_A2 ~~ d01_A2
+d01_A3 ~~ d01_A3
+
+d03_A1 ~~ d03_A1
+d03_A2 ~~ d03_A2
+d03_A3 ~~ d03_A3
+
+d05_A1 ~~ d05_A1
+d05_A2 ~~ d05_A2
+d05_A3 ~~ d05_A3
+
+d07_A1 ~~ d07_A1
+d07_A2 ~~ d07_A2
+d07_A3 ~~ d07_A3
+
+d11_A1 ~~ d11_A1
+d11_A2 ~~ d11_A2
+d11_A3 ~~ d11_A3
+
+d12_A1 ~~ d12_A1
+d12_A2 ~~ d12_A2
+d12_A3 ~~ d12_A3
+
+d13_A1 ~~ d13_A1
+d13_A2 ~~ d13_A2
+d13_A3 ~~ d13_A3
+
+# Parcel residual covariances
+d01_A1 ~~ d03_A1 + d05_A1 + d07_A1 + d11_A1 + d12_A1 + d13_A1
+d01_A2 ~~ d03_A2 + d05_A2 + d07_A2 + d11_A2 + d12_A2 + d13_A2
+d01_A3 ~~ d03_A3 + d05_A3 + d07_A3 + d11_A3 + d12_A3 + d13_A3
+
+d03_A1 ~~ d05_A1 + d07_A1 + d11_A1 + d12_A1 + d13_A1
+d03_A2 ~~ d05_A2 + d07_A2 + d11_A2 + d12_A2 + d13_A2
+d03_A3 ~~ d05_A3 + d07_A3 + d11_A3 + d12_A3 + d13_A3
+
+d05_A1 ~~ d07_A1 + d11_A1 + d12_A1 + d13_A1
+d05_A2 ~~ d07_A2 + d11_A2 + d12_A2 + d13_A2
+d05_A3 ~~ d07_A3 + d11_A3 + d12_A3 + d13_A3
+
+d07_A1 ~~ d11_A1 + d12_A1 + d13_A1
+d07_A2 ~~ d11_A2 + d12_A2 + d13_A2
+d07_A3 ~~ d11_A3 + d12_A3 + d13_A3
+
+
+d11_A1 ~~ d12_A1 + d13_A1
+d11_A2 ~~ d12_A2 + d13_A2
+d11_A3 ~~ d12_A3 + d13_A3
+
+d12_A1 ~~ d13_A1
+d12_A2 ~~ d13_A2
+d12_A3 ~~ d13_A3
+
+
+##Univariate Growth Curve Stuff:
+DadAgreeablenessIntercept =~ 1*W1Agreeableness_Dad+1*W3Agreeableness_Dad+1*W5Agreeableness_Dad+1*W7Agreeableness_Dad+1*W11Agreeableness_Dad +1*W12Agreeableness_Dad+1*W13Agreeableness_Dad
+
+DadAgreeablenessSlope =~ -0.764*W1Agreeableness_Dad+-0.569*W3Agreeableness_Dad+-0.374*W5Agreeableness_Dad+-0.17*W7Agreeableness_Dad+0.324*W11Agreeableness_Dad+0.468*W12Agreeableness_Dad+0.764*W13Agreeableness_Dad
+
+
+DadAgreeablenessIntercept ~ 0*1
+DadAgreeablenessSlope ~ 1
+
+DadAgreeablenessIntercept ~~ DadAgreeablenessIntercept
+DadAgreeablenessSlope ~~ DadAgreeablenessSlope
+DadAgreeablenessIntercept ~~ DadAgreeablenessSlope
+"
+```
+
+### Strictly Overlapping Models
+
+##### MOM Agreeableness UNIVARIATE Overlap
+
+```{r}
+Mom_Univariate_Agreeableness_Overlap <- " #----------------- MOM Univariate OVERLAP -----------
+#Latent Variables:
+W5Agreeableness_Mom  =~ NA*m05_A1 + mlambda0*m05_A1 + mlambda1*m05_A2 + mlambda2*m05_A3
+W7Agreeableness_Mom  =~ NA*m07_A1 + mlambda0*m07_A1 + mlambda1*m07_A2 + mlambda2*m07_A3
+W10Agreeableness_Mom =~ NA*m10_A1 + mlambda0*m10_A1 + mlambda1*m10_A2 + mlambda2*m10_A3
+W11Agreeableness_Mom =~ NA*m11_A1 + mlambda0*m11_A1 + mlambda1*m11_A2 + mlambda2*m11_A3
+W12Agreeableness_Mom =~ NA*m12_A1 + mlambda0*m12_A1 + mlambda1*m12_A2 + mlambda2*m12_A3
+W13Agreeableness_Mom =~ NA*m13_A1 + mlambda0*m13_A1 + mlambda1*m13_A2 + mlambda2*m13_A3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Agreeableness_Mom  ~ 0
+W7Agreeableness_Mom  ~ 0
+W10Agreeableness_Mom ~ 0
+W11Agreeableness_Mom ~ 0
+W12Agreeableness_Mom ~ 0
+W13Agreeableness_Mom ~ 0
+
+# Latent Variable Variances
+W5Agreeableness_Mom  ~~ 1*W5Agreeableness_Mom
+W7Agreeableness_Mom  ~~ 1*W7Agreeableness_Mom
+W10Agreeableness_Mom ~~ 1*W10Agreeableness_Mom
+W11Agreeableness_Mom ~~ 1*W11Agreeableness_Mom
+W12Agreeableness_Mom ~~ 1*W12Agreeableness_Mom
+W13Agreeableness_Mom ~~ 1*W13Agreeableness_Mom
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+m05_A1 ~ 1
+m05_A2 ~ 1
+m05_A3 ~ 1
+
+m07_A1 ~ 1
+m07_A2 ~ 1
+m07_A3 ~ mintercept3*1
+
+m10_A1 ~ mintercept1*1
+m10_A2 ~ mintercept2*1
+m10_A3 ~ 1
+
+m11_A1 ~ mintercept1*1
+m11_A2 ~ mintercept2*1
+m11_A3 ~ 1
+
+m12_A1 ~ mintercept1*1
+m12_A2 ~ mintercept2*1
+m12_A3 ~ 1
+
+m13_A1 ~ 1
+m13_A2 ~ mintercept2*1
+m13_A3 ~ 1
+
+# Parcel variances
+m05_A1 ~~ m05_A1
+m05_A2 ~~ m05_A2
+m05_A3 ~~ m05_A3
+
+m07_A1 ~~ m07_A1
+m07_A2 ~~ m07_A2
+m07_A3 ~~ m07_A3
+
+m10_A1 ~~ m10_A1
+m10_A2 ~~ m10_A2
+m10_A3 ~~ m10_A3
+
+m11_A1 ~~ m11_A1
+m11_A2 ~~ m11_A2
+m11_A3 ~~ m11_A3
+
+m12_A1 ~~ m12_A1
+m12_A2 ~~ m12_A2
+m12_A3 ~~ m12_A3
+
+m13_A1 ~~ m13_A1
+m13_A2 ~~ m13_A2
+m13_A3 ~~ m13_A3
+
+# Parcel residual covariances
+m05_A1 ~~ m07_A1 + m10_A1 + m11_A1 + m12_A1 + m13_A1
+m05_A2 ~~ m07_A2 + m10_A2 + m11_A2 + m12_A2 + m13_A2
+m05_A3 ~~ m07_A3 + m10_A3 + m11_A3 + m12_A3 + m13_A3
+
+m07_A1 ~~ m10_A1 + m11_A1 + m12_A1 + m13_A1
+m07_A2 ~~ m10_A2 + m11_A2 + m12_A2 + m13_A2
+m07_A3 ~~ m10_A3 + m11_A3 + m12_A3 + m13_A3
+
+m10_A1 ~~ m11_A1 + m12_A1 + m13_A1
+m10_A2 ~~ m11_A2 + m12_A2 + m13_A2
+m10_A3 ~~ m11_A3 + m12_A3 + m13_A3
+
+m11_A1 ~~ m12_A1 + m13_A1
+m11_A2 ~~ m12_A2 + m13_A2
+m11_A3 ~~ m12_A3 + m13_A3
+
+m12_A1 ~~ m13_A1
+m12_A2 ~~ m13_A2
+m12_A3 ~~ m13_A3
+
+##Univariate Growth Curve Stuff:
+MomAgreeablenessIntercept =~ W5Agreeableness_Mom+1*W7Agreeableness_Mom+1*W10Agreeableness_Mom+1*W11Agreeableness_Mom+1*W12Agreeableness_Mom +1*W13Agreeableness_Mom
+
+MomAgreeablenessSlope =~ -0.569*W5Agreeableness_Mom+-0.364*W7Agreeableness_Mom+-0.059*W10Agreeableness_Mom+0.13*W11Agreeableness_Mom+0.274*W12Agreeableness_Mom+0.569*W13Agreeableness_Mom
+
+MomAgreeablenessIntercept ~ 0*1
+MomAgreeablenessSlope ~ 1
+
+MomAgreeablenessIntercept ~~ MomAgreeablenessIntercept
+MomAgreeablenessSlope ~~ MomAgreeablenessSlope
+MomAgreeablenessIntercept ~~ MomAgreeablenessSlope
+"
+```
+
+##### DAD Agreeableness UNIVARIATE Overlap
+
+```{r}
+Dad_Univariate_Agreeableness_Overlap <- " #---------- Dad Uni Extra Overlap -----------
+#Latent Variables:
+W5Agreeableness_Dad  =~ NA*d05_A1 + dlambda0*d05_A1 + dlambda1*d05_A2 + dlambda2*d05_A3
+W7Agreeableness_Dad  =~ NA*d07_A1 + dlambda1*d07_A2 + dlambda2*d07_A3
+W11Agreeableness_Dad =~ NA*d11_A1 + dlambda0*d11_A1 + dlambda1*d11_A2 + dlambda2*d11_A3
+W12Agreeableness_Dad =~ NA*d12_A1 + dlambda0*d12_A1 + dlambda1*d12_A2 + dlambda2*d12_A3
+W13Agreeableness_Dad =~ NA*d13_A1 + dlambda0*d13_A1 + dlambda1*d13_A2 + dlambda2*d13_A3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Agreeableness_Dad  ~ 0
+W7Agreeableness_Dad  ~ 0
+W11Agreeableness_Dad ~ 0
+W12Agreeableness_Dad ~ 0
+W13Agreeableness_Dad ~ 0
+
+# Latent Variable Variances
+W5Agreeableness_Dad  ~~ 1*W5Agreeableness_Dad
+W7Agreeableness_Dad  ~~ 1*W7Agreeableness_Dad
+W11Agreeableness_Dad ~~ 1*W11Agreeableness_Dad
+W12Agreeableness_Dad ~~ 1*W12Agreeableness_Dad
+W13Agreeableness_Dad ~~ 1*W13Agreeableness_Dad
+
+#Parcel Intercepts
+d05_A1 ~ 1
+d05_A2 ~ 1
+d05_A3 ~ 1
+
+d07_A1 ~ 1
+d07_A2 ~ 1
+d07_A3 ~ 1
+
+d11_A1 ~ 1
+d11_A2 ~ dintercept2*1
+d11_A3 ~ 1
+
+d12_A1 ~ dintercept1*1
+d12_A2 ~ dintercept2*1
+d12_A3 ~ 1
+
+d13_A1 ~ 1
+d13_A2 ~ dintercept2*1
+d13_A3 ~ 1
+
+# Parcel variances
+d05_A1 ~~ d05_A1
+d05_A2 ~~ d05_A2
+d05_A3 ~~ d05_A3
+
+d07_A1 ~~ d07_A1
+d07_A2 ~~ d07_A2
+d07_A3 ~~ d07_A3
+
+d11_A1 ~~ d11_A1
+d11_A2 ~~ d11_A2
+d11_A3 ~~ d11_A3
+
+d12_A1 ~~ d12_A1
+d12_A2 ~~ d12_A2
+d12_A3 ~~ d12_A3
+
+d13_A1 ~~ d13_A1
+d13_A2 ~~ d13_A2
+d13_A3 ~~ d13_A3
+
+# Parcel residual covariances
+d05_A1 ~~ d07_A1 + d11_A1 + d12_A1 + d13_A1
+d05_A2 ~~ d07_A2 + d11_A2 + d12_A2 + d13_A2
+d05_A3 ~~ d07_A3 + d11_A3 + d12_A3 + d13_A3
+
+d07_A1 ~~ d11_A1 + d12_A1 + d13_A1
+d07_A2 ~~ d11_A2 + d12_A2 + d13_A2
+d07_A3 ~~ d11_A3 + d12_A3 + d13_A3
+
+d11_A1 ~~ d12_A1 + d13_A1
+d11_A2 ~~ d12_A2 + d13_A2
+d11_A3 ~~ d12_A3 + d13_A3
+
+d12_A1 ~~ d13_A1
+d12_A2 ~~ d13_A2
+d12_A3 ~~ d13_A3
+
+
+##Univariate Growth Curve Stuff:
+DadAgreeablenessIntercept =~ 1*W5Agreeableness_Dad+1*W7Agreeableness_Dad+1*W11Agreeableness_Dad+1*W12Agreeableness_Dad+1*W13Agreeableness_Dad
+
+DadAgreeablenessSlope =~ -0.569*W5Agreeableness_Dad+-0.364*W7Agreeableness_Dad+0.13*W11Agreeableness_Dad+0.274*W12Agreeableness_Dad+0.569*W13Agreeableness_Dad
+
+
+DadAgreeablenessIntercept ~ 0*1
+DadAgreeablenessSlope ~ 1
+
+DadAgreeablenessIntercept ~~ DadAgreeablenessIntercept
+DadAgreeablenessSlope ~~ DadAgreeablenessSlope
+DadAgreeablenessIntercept ~~ DadAgreeablenessSlope
+"
+```
+
+## -------- CONSCIENTIOUSNESS --------
+
+### Full Trajectory Models:
+
+##### CHILD CONSCIENTIOUSNESS UNIVARIATE
+
+```{r}
+Child_Univariate_Conscientiousness <- "
+#-------------------- ChildPartialStrong_1 --------------------
+W5Conscientiousness_Child  =~ NA*c05_C1 + clambda0*c05_C1 + clambda1*c05_C2 + clambda2*c05_C3
+W7Conscientiousness_Child  =~ NA*c07_C1 + clambda0*c07_C1 + clambda1*c07_C2 + clambda2*c07_C3
+W10Conscientiousness_Child =~ NA*c10_C1 + clambda0*c10_C1 + clambda1*c10_C2 + clambda2*c10_C3
+W11Conscientiousness_Child =~ NA*c11_C1 + clambda0*c11_C1 + clambda1*c11_C2 + clambda2*c11_C3
+W12Conscientiousness_Child =~ NA*c12_C1 + clambda0*c12_C1 + clambda1*c12_C2 + clambda2*c12_C3
+W13Conscientiousness_Child =~ NA*c13_C1 + clambda0*c13_C1 + clambda1*c13_C2 + clambda2*c13_C3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Conscientiousness_Child  ~ 0
+W7Conscientiousness_Child  ~ 0
+W10Conscientiousness_Child ~ 0
+W11Conscientiousness_Child ~ 0
+W12Conscientiousness_Child ~ 0
+W13Conscientiousness_Child ~ 0
+
+# Latent Variable Variances
+W5Conscientiousness_Child  ~~ 1*W5Conscientiousness_Child
+W7Conscientiousness_Child  ~~ 1*W7Conscientiousness_Child
+W10Conscientiousness_Child ~~ 1*W10Conscientiousness_Child
+W11Conscientiousness_Child ~~ 1*W11Conscientiousness_Child
+W12Conscientiousness_Child ~~ 1*W12Conscientiousness_Child
+W13Conscientiousness_Child ~~ 1*W13Conscientiousness_Child
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+c05_C1 ~ cintercept1*1
+c05_C2 ~ 1
+c05_C3 ~ 1
+
+c07_C1 ~ cintercept1*1
+c07_C2 ~ 1
+c07_C3 ~ 1
+
+c10_C1 ~ cintercept1*1
+c10_C2 ~ 1
+c10_C3 ~ 1
+
+c11_C1 ~ cintercept1*1
+c11_C2 ~ cintercept2*1
+c11_C3 ~ cintercept3*1
+
+c12_C1 ~ cintercept1*1
+c12_C2 ~ cintercept2*1
+c12_C3 ~ cintercept3*1
+
+c13_C1 ~ cintercept1*1
+c13_C2 ~ 1
+c13_C3 ~ cintercept3*1
+
+# Parcel variances
+c05_C1 ~~ c05_C1
+c05_C2 ~~ c05_C2
+c05_C3 ~~ c05_C3
+
+c07_C1 ~~ c07_C1
+c07_C2 ~~ c07_C2
+c07_C3 ~~ c07_C3
+
+c10_C1 ~~ c10_C1
+c10_C2 ~~ c10_C2
+c10_C3 ~~ c10_C3
+
+c11_C1 ~~ c11_C1
+c11_C2 ~~ c11_C2
+c11_C3 ~~ c11_C3
+
+c12_C1 ~~ c12_C1
+c12_C2 ~~ c12_C2
+c12_C3 ~~ c12_C3
+
+c13_C1 ~~ c13_C1
+c13_C2 ~~ c13_C2
+c13_C3 ~~ c13_C3
+
+# Parcel residual covariances
+c05_C1 ~~ c07_C1 + c10_C1 + c11_C1 + c12_C1 + c13_C1
+c05_C2 ~~ c07_C2 + c10_C2 + c11_C2 + c12_C2 + c13_C2
+c05_C3 ~~ c07_C3 + c10_C3 + c11_C3 + c12_C3 + c13_C3
+
+c07_C1 ~~ c10_C1 + c11_C1 + c12_C1 + c13_C1
+c07_C2 ~~ c10_C2 + c11_C2 + c12_C2 + c13_C2
+c07_C3 ~~ c10_C3 + c11_C3 + c12_C3 + c13_C3
+
+c10_C1 ~~ c11_C1 + c12_C1 + c13_C1
+c10_C2 ~~ c11_C2 + c12_C2 + c13_C2
+c10_C3 ~~ c11_C3 + c12_C3 + c13_C3
+
+c11_C1 ~~ c12_C1 + c13_C1
+c11_C2 ~~ c12_C2 + c13_C2
+c11_C3 ~~ c12_C3 + c13_C3
+
+c12_C1 ~~ c13_C1
+c12_C2 ~~ c13_C2
+c12_C3 ~~ c13_C3
+
+##Univariate Growth Curve Stuff:
+ChildConscientiousnessIntercept =~ 1*W5Conscientiousness_Child+1*W7Conscientiousness_Child+1*W10Conscientiousness_Child+1*W11Conscientiousness_Child+1*W12Conscientiousness_Child+1*W13Conscientiousness_Child
+
+ChildConscientiousnessSlope =~ -0.569*W5Conscientiousness_Child+-0.364*W7Conscientiousness_Child+-0.059*W10Conscientiousness_Child+0.13*W11Conscientiousness_Child+0.274*W12Conscientiousness_Child+0.569*W13Conscientiousness_Child
+
+ChildConscientiousnessIntercept ~ 0*1
+ChildConscientiousnessSlope ~ 1
+
+ChildConscientiousnessIntercept ~~ ChildConscientiousnessIntercept
+ChildConscientiousnessSlope ~~ ChildConscientiousnessSlope
+ChildConscientiousnessIntercept ~~ ChildConscientiousnessSlope
+"
+```
+
+##### MOM Conscientiousness UNIVARIATE FULL
+
+```{r}
+Mom_Univariate_Conscientiousness_Full <- " #----------------- MOM Univariate Full -----------
+
+#Latent Variables:
+W1Conscientiousness_Mom  =~ NA*m01_C1 + mlambda0*m01_C1 + mlambda1*m01_C2 + mlambda2*m01_C3
+W3Conscientiousness_Mom  =~ NA*m03_C1 + mlambda0*m03_C1 + mlambda1*m03_C2 + mlambda2*m03_C3
+W5Conscientiousness_Mom  =~ NA*m05_C1 + mlambda0*m05_C1 + mlambda1*m05_C2 + mlambda2*m05_C3
+W7Conscientiousness_Mom  =~ NA*m07_C1 + mlambda0*m07_C1 + mlambda1*m07_C2 + mlambda2*m07_C3
+W10Conscientiousness_Mom =~ NA*m10_C1 + mlambda0*m10_C1 + mlambda1*m10_C2 + mlambda2*m10_C3
+W11Conscientiousness_Mom =~ NA*m11_C1 + mlambda0*m11_C1 + mlambda1*m11_C2 + mlambda2*m11_C3
+W12Conscientiousness_Mom =~ NA*m12_C1 + mlambda0*m12_C1 + mlambda1*m12_C2 + mlambda2*m12_C3
+W13Conscientiousness_Mom =~ NA*m13_C1 + mlambda0*m13_C1 + mlambda1*m13_C2 + mlambda2*m13_C3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Conscientiousness_Mom  ~ 0
+W3Conscientiousness_Mom  ~ 0
+W5Conscientiousness_Mom  ~ 0
+W7Conscientiousness_Mom  ~ 0
+W10Conscientiousness_Mom ~ 0
+W11Conscientiousness_Mom ~ 0
+W12Conscientiousness_Mom ~ 0
+W13Conscientiousness_Mom ~ 0
+
+# Latent Variable Variances
+W1Conscientiousness_Mom  ~~ 1*W1Conscientiousness_Mom
+W3Conscientiousness_Mom  ~~ 1*W3Conscientiousness_Mom
+W5Conscientiousness_Mom  ~~ 1*W5Conscientiousness_Mom
+W7Conscientiousness_Mom  ~~ 1*W7Conscientiousness_Mom
+W10Conscientiousness_Mom ~~ 1*W10Conscientiousness_Mom
+W11Conscientiousness_Mom ~~ 1*W11Conscientiousness_Mom
+W12Conscientiousness_Mom ~~ 1*W12Conscientiousness_Mom
+W13Conscientiousness_Mom ~~ 1*W13Conscientiousness_Mom
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+m01_C1 ~ 1
+m01_C2 ~ mintercept2*1
+m01_C3 ~ 1
+
+m03_C1 ~ 1
+m03_C2 ~ 1
+m03_C3 ~ 1
+
+m05_C1 ~ mintercept1*1
+m05_C2 ~ 1
+m05_C3 ~ 1
+
+m07_C1 ~ mintercept1*1
+m07_C2 ~ 1
+m07_C3 ~ 1
+
+m10_C1 ~ mintercept1*1
+m10_C2 ~ mintercept2*1
+m10_C3 ~ mintercept3*1
+
+m11_C1 ~ mintercept1*1
+m11_C2 ~ 1
+m11_C3 ~ mintercept3*1
+
+m12_C1 ~ mintercept1*1
+m12_C2 ~ 1
+m12_C3 ~ mintercept3*1
+
+m13_C1 ~ mintercept1*1
+m13_C2 ~ mintercept2*1
+m13_C3 ~ 1
+
+# Parcel variances
+m01_C1 ~~ m01_C1
+m01_C2 ~~ m01_C2
+m01_C3 ~~ m01_C3
+
+m03_C1 ~~ m03_C1
+m03_C2 ~~ m03_C2
+m03_C3 ~~ m03_C3
+
+m05_C1 ~~ m05_C1
+m05_C2 ~~ m05_C2
+m05_C3 ~~ m05_C3
+
+m07_C1 ~~ m07_C1
+m07_C2 ~~ m07_C2
+m07_C3 ~~ m07_C3
+
+m10_C1 ~~ m10_C1
+m10_C2 ~~ m10_C2
+m10_C3 ~~ m10_C3
+
+m11_C1 ~~ m11_C1
+m11_C2 ~~ m11_C2
+m11_C3 ~~ m11_C3
+
+m12_C1 ~~ m12_C1
+m12_C2 ~~ m12_C2
+m12_C3 ~~ m12_C3
+
+m13_C1 ~~ m13_C1
+m13_C2 ~~ m13_C2
+m13_C3 ~~ m13_C3
+
+# Parcel residual covariances
+m01_C1 ~~ m03_C1 + m05_C1 + m07_C1 + m10_C1 + m11_C1 + m12_C1 + m13_C1
+m01_C2 ~~ m03_C2 + m05_C2 + m07_C2 + m10_C2 + m11_C2 + m12_C2 + m13_C2
+m01_C3 ~~ m03_C3 + m05_C3 + m07_C3 + m10_C3 + m11_C3 + m12_C3 + m13_C3
+
+m03_C1 ~~ m05_C1 + m07_C1 + m10_C1 + m11_C1 + m12_C1 + m13_C1
+m03_C2 ~~ m05_C2 + m07_C2 + m10_C2 + m11_C2 + m12_C2 + m13_C2
+m03_C3 ~~ m05_C3 + m07_C3 + m10_C3 + m11_C3 + m12_C3 + m13_C3
+
+m05_C1 ~~ m07_C1 + m10_C1 + m11_C1 + m12_C1 + m13_C1
+m05_C2 ~~ m07_C2 + m10_C2 + m11_C2 + m12_C2 + m13_C2
+m05_C3 ~~ m07_C3 + m10_C3 + m11_C3 + m12_C3 + m13_C3
+
+m07_C1 ~~ m10_C1 + m11_C1 + m12_C1 + m13_C1
+m07_C2 ~~ m10_C2 + m11_C2 + m12_C2 + m13_C2
+m07_C3 ~~ m10_C3 + m11_C3 + m12_C3 + m13_C3
+
+m10_C1 ~~ m11_C1 + m12_C1 + m13_C1
+m10_C2 ~~ m11_C2 + m12_C2 + m13_C2
+m10_C3 ~~ m11_C3 + m12_C3 + m13_C3
+
+m11_C1 ~~ m12_C1 + m13_C1
+m11_C2 ~~ m12_C2 + m13_C2
+m11_C3 ~~ m12_C3 + m13_C3
+
+m12_C1 ~~ m13_C1
+m12_C2 ~~ m13_C2
+m12_C3 ~~ m13_C3
+
+##Univariate Growth Curve Stuff:
+MomConscientiousnessIntercept =~ 1*W1Conscientiousness_Mom+1*W3Conscientiousness_Mom+1*W5Conscientiousness_Mom+1*W7Conscientiousness_Mom+1*W10Conscientiousness_Mom+1*W11Conscientiousness_Mom+1*W12Conscientiousness_Mom+1*W13Conscientiousness_Mom
+
+MomConscientiousnessSlope =~ -0.764*W1Conscientiousness_Mom+-0.569*W3Conscientiousness_Mom+-0.374*W5Conscientiousness_Mom+-0.17*W7Conscientiousness_Mom+0.136*W10Conscientiousness_Mom+0.324*W11Conscientiousness_Mom+0.468*W12Conscientiousness_Mom+0.764*W13Conscientiousness_Mom
+
+MomConscientiousnessIntercept ~ 0*1
+MomConscientiousnessSlope ~ 1
+
+MomConscientiousnessIntercept ~~ MomConscientiousnessIntercept
+MomConscientiousnessSlope ~~ MomConscientiousnessSlope
+MomConscientiousnessIntercept ~~ MomConscientiousnessSlope
+"
+```
+
+##### DAD Conscientiousness UNIVARIATE FULL
+
+```{r}
+Dad_Conscientiousness_Univariate_Full <- "## ----------------- DAD UNIVARIATE FULL ------------
+W1Conscientiousness_Dad  =~ NA*d01_C1 + dlambda0*d01_C1 + dlambda1*d01_C2 + dlambda2*d01_C3
+W3Conscientiousness_Dad  =~ NA*d03_C1 + dlambda0*d03_C1 + dlambda1*d03_C2 + dlambda2*d03_C3
+W5Conscientiousness_Dad  =~ NA*d05_C1 + dlambda0*d05_C1 + dlambda1*d05_C2 + dlambda2*d05_C3
+W7Conscientiousness_Dad  =~ NA*d07_C1 + dlambda0*d07_C1 + dlambda1*d07_C2 + dlambda2*d07_C3
+W11Conscientiousness_Dad =~ NA*d11_C1 + dlambda0*d11_C1 + dlambda1*d11_C2 + dlambda2*d11_C3
+W12Conscientiousness_Dad =~ NA*d12_C1 + dlambda0*d12_C1 + dlambda1*d12_C2 + dlambda2*d12_C3
+W13Conscientiousness_Dad =~ NA*d13_C1 + dlambda1*d13_C2 + dlambda2*d13_C3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Conscientiousness_Dad  ~ 0
+W3Conscientiousness_Dad  ~ 0
+W5Conscientiousness_Dad  ~ 0
+W7Conscientiousness_Dad  ~ 0
+W11Conscientiousness_Dad ~ 0
+W12Conscientiousness_Dad ~ 0
+W13Conscientiousness_Dad ~ 0
+
+# Latent Variable Variances
+W1Conscientiousness_Dad  ~~ 1*W1Conscientiousness_Dad
+W3Conscientiousness_Dad  ~~ 1*W3Conscientiousness_Dad
+W5Conscientiousness_Dad  ~~ 1*W5Conscientiousness_Dad
+W7Conscientiousness_Dad  ~~ 1*W7Conscientiousness_Dad
+W11Conscientiousness_Dad ~~ 1*W11Conscientiousness_Dad
+W12Conscientiousness_Dad ~~ 1*W12Conscientiousness_Dad
+W13Conscientiousness_Dad ~~ 1*W13Conscientiousness_Dad
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+d01_C1 ~ dintercept1*1
+d01_C2 ~ 1
+d01_C3 ~ 1
+
+d03_C1 ~ dintercept1*1
+d03_C2 ~ 1
+d03_C3 ~ dintercept3*1
+
+d05_C1 ~ dintercept1*1
+d05_C2 ~ dintercept2*1
+d05_C3 ~ dintercept3*1
+
+d07_C1 ~ dintercept1*1
+d07_C2 ~ 1
+d07_C3 ~ dintercept3*1
+
+d11_C1 ~ dintercept1*1
+d11_C2 ~ dintercept2*1
+d11_C3 ~ dintercept3*1
+
+d12_C1 ~ dintercept1*1
+d12_C2 ~ dintercept2*1
+d12_C3 ~ dintercept3*1
+
+d13_C1 ~ dintercept1*1
+d13_C2 ~ dintercept2*1
+d13_C3 ~ dintercept3*1
+
+# Parcel variances
+d01_C1 ~~ d01_C1
+d01_C2 ~~ d01_C2
+d01_C3 ~~ d01_C3
+
+d03_C1 ~~ d03_C1
+d03_C2 ~~ d03_C2
+d03_C3 ~~ d03_C3
+
+d05_C1 ~~ d05_C1
+d05_C2 ~~ d05_C2
+d05_C3 ~~ d05_C3
+
+d07_C1 ~~ d07_C1
+d07_C2 ~~ d07_C2
+d07_C3 ~~ d07_C3
+
+d11_C1 ~~ d11_C1
+d11_C2 ~~ d11_C2
+d11_C3 ~~ d11_C3
+
+d12_C1 ~~ d12_C1
+d12_C2 ~~ d12_C2
+d12_C3 ~~ d12_C3
+
+d13_C1 ~~ d13_C1
+d13_C2 ~~ d13_C2
+d13_C3 ~~ d13_C3
+
+# Parcel residual covariances
+d01_C1 ~~ d03_C1 + d05_C1 + d07_C1 + d11_C1 + d12_C1 + d13_C1
+d01_C2 ~~ d03_C2 + d05_C2 + d07_C2 + d11_C2 + d12_C2 + d13_C2
+d01_C3 ~~ d03_C3 + d05_C3 + d07_C3 + d11_C3 + d12_C3 + d13_C3
+
+d03_C1 ~~ d05_C1 + d07_C1 + d11_C1 + d12_C1 + d13_C1
+d03_C2 ~~ d05_C2 + d07_C2 + d11_C2 + d12_C2 + d13_C2
+d03_C3 ~~ d05_C3 + d07_C3 + d11_C3 + d12_C3 + d13_C3
+
+d05_C1 ~~ d07_C1 + d11_C1 + d12_C1 + d13_C1
+d05_C2 ~~ d07_C2 + d11_C2 + d12_C2 + d13_C2
+d05_C3 ~~ d07_C3 + d11_C3 + d12_C3 + d13_C3
+
+d07_C1 ~~ d11_C1 + d12_C1 + d13_C1
+d07_C2 ~~ d11_C2 + d12_C2 + d13_C2
+d07_C3 ~~ d11_C3 + d12_C3 + d13_C3
+
+
+d11_C1 ~~ d12_C1 + d13_C1
+d11_C2 ~~ d12_C2 + d13_C2
+d11_C3 ~~ d12_C3 + d13_C3
+
+d12_C1 ~~ d13_C1
+d12_C2 ~~ d13_C2
+d12_C3 ~~ d13_C3
+
+##Univariate Growth Curve Stuff:
+DadConscientiousnessIntercept =~ 1*W1Conscientiousness_Dad+1*W3Conscientiousness_Dad+1*W5Conscientiousness_Dad+1*W7Conscientiousness_Dad+1*W11Conscientiousness_Dad+1*W12Conscientiousness_Dad+1*W13Conscientiousness_Dad
+
+DadConscientiousnessSlope =~ -0.764*W1Conscientiousness_Dad+-0.569*W3Conscientiousness_Dad+-0.374*W5Conscientiousness_Dad+-0.17*W7Conscientiousness_Dad+0.324*W11Conscientiousness_Dad+0.468*W12Conscientiousness_Dad+0.764*W13Conscientiousness_Dad
+
+DadConscientiousnessIntercept ~ 0*1
+DadConscientiousnessSlope ~ 1
+
+DadConscientiousnessIntercept ~~ DadConscientiousnessIntercept
+DadConscientiousnessSlope ~~ DadConscientiousnessSlope
+DadConscientiousnessIntercept ~~ DadConscientiousnessSlope
+"
+```
+
+### Strictly Overlapping Models:
+
+##### MOM Conscientiousness UNIVARIATE FULL
+
+##### MOM Conscientiousness UNIVARIATE Overlap
+
+```{r}
+Mom_Univariate_Conscientiousness_Overlap <- " #----------------- MOM Univariate OVERLAP -----------
+#Latent Variables:
+W5Conscientiousness_Mom  =~ NA*m05_C1 + mlambda0*m05_C1 + mlambda1*m05_C2 + mlambda2*m05_C3
+W7Conscientiousness_Mom  =~ NA*m07_C1 + mlambda0*m07_C1 + mlambda1*m07_C2 + mlambda2*m07_C3
+W10Conscientiousness_Mom =~ NA*m10_C1 + mlambda0*m10_C1 + mlambda1*m10_C2 + mlambda2*m10_C3
+W11Conscientiousness_Mom =~ NA*m11_C1 + mlambda0*m11_C1 + mlambda1*m11_C2 + mlambda2*m11_C3
+W12Conscientiousness_Mom =~ NA*m12_C1 + mlambda0*m12_C1 + mlambda1*m12_C2 + mlambda2*m12_C3
+W13Conscientiousness_Mom =~ NA*m13_C1 + mlambda0*m13_C1 + mlambda1*m13_C2 + mlambda2*m13_C3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Conscientiousness_Mom  ~ 0
+W7Conscientiousness_Mom  ~ 0
+W10Conscientiousness_Mom ~ 0
+W11Conscientiousness_Mom ~ 0
+W12Conscientiousness_Mom ~ 0
+W13Conscientiousness_Mom ~ 0
+
+# Latent Variable Variances
+W5Conscientiousness_Mom  ~~ 1*W5Conscientiousness_Mom
+W7Conscientiousness_Mom  ~~ 1*W7Conscientiousness_Mom
+W10Conscientiousness_Mom ~~ 1*W10Conscientiousness_Mom
+W11Conscientiousness_Mom ~~ 1*W11Conscientiousness_Mom
+W12Conscientiousness_Mom ~~ 1*W12Conscientiousness_Mom
+W13Conscientiousness_Mom ~~ 1*W13Conscientiousness_Mom
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+m05_C1 ~ mintercept1*1
+m05_C2 ~ mintercept2*1
+m05_C3 ~ mintercept3*1
+
+m07_C1 ~ mintercept1*1
+m07_C2 ~ mintercept2*1
+m07_C3 ~ mintercept3*1
+
+m10_C1 ~ mintercept1*1
+m10_C2 ~ mintercept2*1
+m10_C3 ~ mintercept3*1
+
+m11_C1 ~ mintercept1*1
+m11_C2 ~ mintercept2*1
+m11_C3 ~ mintercept3*1
+
+m12_C1 ~ mintercept1*1
+m12_C2 ~ mintercept2*1
+m12_C3 ~ mintercept3*1
+
+m13_C1 ~ mintercept1*1
+m13_C2 ~ mintercept2*1
+m13_C3 ~ mintercept3*1
+
+# Parcel variances
+m05_C1 ~~ m05_C1
+m05_C2 ~~ m05_C2
+m05_C3 ~~ m05_C3
+
+m07_C1 ~~ m07_C1
+m07_C2 ~~ m07_C2
+m07_C3 ~~ m07_C3
+
+m10_C1 ~~ m10_C1
+m10_C2 ~~ m10_C2
+m10_C3 ~~ m10_C3
+
+m11_C1 ~~ m11_C1
+m11_C2 ~~ m11_C2
+m11_C3 ~~ m11_C3
+
+m12_C1 ~~ m12_C1
+m12_C2 ~~ m12_C2
+m12_C3 ~~ m12_C3
+
+m13_C1 ~~ m13_C1
+m13_C2 ~~ m13_C2
+m13_C3 ~~ m13_C3
+
+# Parcel residual covariances
+m05_C1 ~~ m07_C1 + m10_C1 + m11_C1 + m12_C1 + m13_C1
+m05_C2 ~~ m07_C2 + m10_C2 + m11_C2 + m12_C2 + m13_C2
+m05_C3 ~~ m07_C3 + m10_C3 + m11_C3 + m12_C3 + m13_C3
+
+m07_C1 ~~ m10_C1 + m11_C1 + m12_C1 + m13_C1
+m07_C2 ~~ m10_C2 + m11_C2 + m12_C2 + m13_C2
+m07_C3 ~~ m10_C3 + m11_C3 + m12_C3 + m13_C3
+
+m10_C1 ~~ m11_C1 + m12_C1 + m13_C1
+m10_C2 ~~ m11_C2 + m12_C2 + m13_C2
+m10_C3 ~~ m11_C3 + m12_C3 + m13_C3
+
+m11_C1 ~~ m12_C1 + m13_C1
+m11_C2 ~~ m12_C2 + m13_C2
+m11_C3 ~~ m12_C3 + m13_C3
+
+m12_C1 ~~ m13_C1
+m12_C2 ~~ m13_C2
+m12_C3 ~~ m13_C3
+
+##Univariate Growth Curve Stuff:
+MomConscientiousnessIntercept =~ W5Conscientiousness_Mom+1*W7Conscientiousness_Mom+1*W10Conscientiousness_Mom+1*W11Conscientiousness_Mom+1*W12Conscientiousness_Mom+1*W13Conscientiousness_Mom
+
+MomConscientiousnessSlope =~ -0.569*W5Conscientiousness_Mom+-0.364*W7Conscientiousness_Mom+-0.059*W10Conscientiousness_Mom+0.13*W11Conscientiousness_Mom+0.274*W12Conscientiousness_Mom+0.569*W13Conscientiousness_Mom
+
+MomConscientiousnessIntercept ~ 0*1
+MomConscientiousnessSlope ~ 1
+
+MomConscientiousnessIntercept ~~ MomConscientiousnessIntercept
+MomConscientiousnessSlope ~~ MomConscientiousnessSlope
+MomConscientiousnessIntercept ~~ MomConscientiousnessSlope
+"
+```
+
+##### DAD Conscientiousness UNIVARIATE Overlap
+
+```{r}
+Dad_Univariate_Conscientiousness_Overlap <- " #---------- Dad Uni Consci Overlap -----------
+#Latent Variables:
+W5Conscientiousness_Dad  =~ NA*d05_C1 + dlambda0*d05_C1 + dlambda1*d05_C2 + dlambda2*d05_C3
+W7Conscientiousness_Dad  =~ NA*d07_C1 + dlambda0*d07_C1 + dlambda1*d07_C2 + dlambda2*d07_C3
+W11Conscientiousness_Dad =~ NA*d11_C1 + dlambda0*d11_C1 + dlambda1*d11_C2 + dlambda2*d11_C3
+W12Conscientiousness_Dad =~ NA*d12_C1 + dlambda0*d12_C1 + dlambda1*d12_C2 + dlambda2*d12_C3
+W13Conscientiousness_Dad =~ NA*d13_C1 + dlambda0*d13_C1 + dlambda1*d13_C2 + dlambda2*d13_C3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Conscientiousness_Dad  ~ 0
+W7Conscientiousness_Dad  ~ 0
+W11Conscientiousness_Dad ~ 0
+W12Conscientiousness_Dad ~ 0
+W13Conscientiousness_Dad ~ 0
+
+# Latent Variable Variances
+W5Conscientiousness_Dad  ~~ 1*W5Conscientiousness_Dad
+W7Conscientiousness_Dad  ~~ 1*W7Conscientiousness_Dad
+W11Conscientiousness_Dad ~~ 1*W11Conscientiousness_Dad
+W12Conscientiousness_Dad ~~ 1*W12Conscientiousness_Dad
+W13Conscientiousness_Dad ~~ 1*W13Conscientiousness_Dad
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+
+d05_C1 ~ dintercept1*1
+d05_C2 ~ dintercept2*1
+d05_C3 ~ 1
+
+d07_C1 ~ 1
+d07_C2 ~ dintercept2*1
+d07_C3 ~ 1
+
+d11_C1 ~ 1
+d11_C2 ~ dintercept2*1
+d11_C3 ~ 1
+
+d12_C1 ~ 1
+d12_C2 ~ dintercept2*1
+d12_C3 ~ 1
+
+d13_C1 ~ 1
+d13_C2 ~ 1
+d13_C3 ~ dintercept3*1
+
+# Parcel variances
+d05_C1 ~~ d05_C1
+d05_C2 ~~ d05_C2
+d05_C3 ~~ d05_C3
+
+d07_C1 ~~ d07_C1
+d07_C2 ~~ d07_C2
+d07_C3 ~~ d07_C3
+
+
+d11_C1 ~~ d11_C1
+d11_C2 ~~ d11_C2
+d11_C3 ~~ d11_C3
+
+d12_C1 ~~ d12_C1
+d12_C2 ~~ d12_C2
+d12_C3 ~~ d12_C3
+
+d13_C1 ~~ d13_C1
+d13_C2 ~~ d13_C2
+d13_C3 ~~ d13_C3
+
+# Parcel residual covariances
+d05_C1 ~~ d07_C1 + d11_C1 + d12_C1 + d13_C1
+d05_C2 ~~ d07_C2 + d11_C2 + d12_C2 + d13_C2
+d05_C3 ~~ d07_C3 + d11_C3 + d12_C3 + d13_C3
+
+d07_C1 ~~ d11_C1 + d12_C1 + d13_C1
+d07_C2 ~~ d11_C2 + d12_C2 + d13_C2
+d07_C3 ~~ d11_C3 + d12_C3 + d13_C3
+
+d11_C1 ~~ d12_C1 + d13_C1
+d11_C2 ~~ d12_C2 + d13_C2
+d11_C3 ~~ d12_C3 + d13_C3
+
+d12_C1 ~~ d13_C1
+d12_C2 ~~ d13_C2
+d12_C3 ~~ d13_C3
+
+##Univariate Growth Curve Stuff:
+DadConscientiousnessIntercept =~ 1*W5Conscientiousness_Dad+1*W7Conscientiousness_Dad+1*W11Conscientiousness_Dad+1*W12Conscientiousness_Dad+1*W13Conscientiousness_Dad
+
+DadConscientiousnessSlope =~ -0.569*W5Conscientiousness_Dad+-0.364*W7Conscientiousness_Dad+0.13*W11Conscientiousness_Dad+0.274*W12Conscientiousness_Dad+0.569*W13Conscientiousness_Dad
+
+
+DadConscientiousnessIntercept ~ 0
+DadConscientiousnessSlope ~ 1
+
+DadConscientiousnessIntercept ~~ DadConscientiousnessIntercept
+DadConscientiousnessSlope ~~ DadConscientiousnessSlope
+DadConscientiousnessIntercept ~~ DadConscientiousnessSlope
+"
+```
+
+### -------- NEUROTICISM --------
+
+### Full Trajectory Models:
+
+##### CHILD Neuroticism UNIVARIATE
+
+```{r}
+Child_Univariate_Neuroticism <- "
+#Latent Variables:
+W5Neuroticism_Child  =~ NA*c05_N1 + clambda0*c05_N1 + clambda1*c05_N2 + clambda2*c05_N3
+W7Neuroticism_Child  =~ NA*c07_N1 + clambda0*c07_N1 + clambda1*c07_N2 + c07_N3
+W10Neuroticism_Child =~ NA*c10_N1 + clambda0*c10_N1 + clambda1*c10_N2 + clambda2*c10_N3
+W11Neuroticism_Child =~ NA*c11_N1 + clambda0*c11_N1 + clambda1*c11_N2 + clambda2*c11_N3
+W12Neuroticism_Child =~ NA*c12_N1 + clambda0*c12_N1 + clambda1*c12_N2 + clambda2*c12_N3
+W13Neuroticism_Child =~ NA*c13_N1 + clambda0*c13_N1 + clambda1*c13_N2 + clambda2*c13_N3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Neuroticism_Child  ~ 0
+W7Neuroticism_Child  ~ 0
+W10Neuroticism_Child ~ 0
+W11Neuroticism_Child ~ 0
+W12Neuroticism_Child ~ 0
+W13Neuroticism_Child ~ 0
+
+# Latent Variable Variances
+W5Neuroticism_Child  ~~ 1*W5Neuroticism_Child
+W7Neuroticism_Child  ~~ 1*W7Neuroticism_Child
+W10Neuroticism_Child ~~ 1*W10Neuroticism_Child
+W11Neuroticism_Child ~~ 1*W11Neuroticism_Child
+W12Neuroticism_Child ~~ 1*W12Neuroticism_Child
+W13Neuroticism_Child ~~ 1*W13Neuroticism_Child
+
+#Parcel Intercepts
+c05_N1 ~ 1
+c05_N2 ~ 1
+c05_N3 ~ 1
+
+c07_N1 ~ 1
+c07_N2 ~ 1
+c07_N3 ~ 1
+
+c10_N1 ~ cintercept1*1
+c10_N2 ~ cintercept2*1
+c10_N3 ~ cintercept3*1
+
+c11_N1 ~ cintercept1*1
+c11_N2 ~ 1
+c11_N3 ~ cintercept3*1
+
+c12_N1 ~ cintercept1*1
+c12_N2 ~ cintercept2*1
+c12_N3 ~ cintercept3*1
+
+c13_N1 ~ cintercept1*1
+c13_N2 ~ cintercept2*1
+c13_N3 ~ cintercept3*1
+
+# Parcel variances
+c05_N1 ~~ c05_N1
+c05_N2 ~~ c05_N2
+c05_N3 ~~ c05_N3
+
+c07_N1 ~~ c07_N1
+c07_N2 ~~ c07_N2
+c07_N3 ~~ c07_N3
+
+c10_N1 ~~ c10_N1
+c10_N2 ~~ c10_N2
+c10_N3 ~~ c10_N3
+
+c11_N1 ~~ c11_N1
+c11_N2 ~~ c11_N2
+c11_N3 ~~ c11_N3
+
+c12_N1 ~~ c12_N1
+c12_N2 ~~ c12_N2
+c12_N3 ~~ c12_N3
+
+c13_N1 ~~ c13_N1
+c13_N2 ~~ c13_N2
+c13_N3 ~~ c13_N3
+
+# Parcel residual covariances
+c05_N1 ~~ c07_N1 + c10_N1 + c11_N1 + c12_N1 + c13_N1
+c05_N2 ~~ c07_N2 + c10_N2 + c11_N2 + c12_N2 + c13_N2
+c05_N3 ~~ c07_N3 + c10_N3 + c11_N3 + c12_N3 + c13_N3
+
+c07_N1 ~~ c10_N1 + c11_N1 + c12_N1 + c13_N1
+c07_N2 ~~ c10_N2 + c11_N2 + c12_N2 + c13_N2
+c07_N3 ~~ c10_N3 + c11_N3 + c12_N3 + c13_N3
+
+c10_N1 ~~ c11_N1 + c12_N1 + c13_N1
+c10_N2 ~~ c11_N2 + c12_N2 + c13_N2
+c10_N3 ~~ c11_N3 + c12_N3 + c13_N3
+
+c11_N1 ~~ c12_N1 + c13_N1
+c11_N2 ~~ c12_N2 + c13_N2
+c11_N3 ~~ c12_N3 + c13_N3
+
+c12_N1 ~~ c13_N1
+c12_N2 ~~ c13_N2
+c12_N3 ~~ c13_N3
+
+##Univariate Growth Curve Stuff:
+ChildNeuroticismIntercept =~ 1*W5Neuroticism_Child+1*W7Neuroticism_Child+1*W10Neuroticism_Child+1*W11Neuroticism_Child+1*W12Neuroticism_Child+1*W13Neuroticism_Child
+
+ChildNeuroticismSlope =~ -0.569*W5Neuroticism_Child+-0.364*W7Neuroticism_Child+-0.059*W10Neuroticism_Child+0.13*W11Neuroticism_Child+0.274*W12Neuroticism_Child+0.569*W13Neuroticism_Child
+
+ChildNeuroticismIntercept ~ 1
+ChildNeuroticismSlope ~ 1
+
+ChildNeuroticismIntercept ~~ ChildNeuroticismIntercept
+ChildNeuroticismSlope ~~ ChildNeuroticismSlope
+ChildNeuroticismIntercept ~~ ChildNeuroticismSlope
+"
+```
+
+##### MOM Neuroticism UNIVARIATE FULL
+
+```{r}
+Mom_Univariate_Neuroticism_Full <- " #----------------- MOM Univariate Full -----------
+#Latent Variables:
+W1Neuroticism_Mom  =~ NA*m01_N1 + mlambda0*m01_N1 + mlambda1*m01_N2 + mlambda2*m01_N3
+W3Neuroticism_Mom  =~ NA*m03_N1 + mlambda1*m03_N2 + mlambda2*m03_N3
+W5Neuroticism_Mom  =~ NA*m05_N1 + m05_N2 + mlambda2*m05_N3
+W7Neuroticism_Mom  =~ NA*m07_N1 + mlambda1*m07_N2 + mlambda2*m07_N3
+W10Neuroticism_Mom =~ NA*m10_N1 + mlambda0*m10_N1 + mlambda1*m10_N2 + mlambda2*m10_N3
+W11Neuroticism_Mom =~ NA*m11_N1 + mlambda0*m11_N1 + m11_N2 + lambda2*m11_N3
+W12Neuroticism_Mom =~ NA*m12_N1 + mlambda0*m12_N1 + mlambda1*m12_N2 + mlambda2*m12_N3
+W13Neuroticism_Mom =~ NA*m13_N1 + mlambda0*m13_N1 + mlambda1*m13_N2 + mlambda2*m13_N3
+
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Neuroticism_Mom  ~ 0
+W3Neuroticism_Mom  ~ 0
+W5Neuroticism_Mom  ~ 0
+W7Neuroticism_Mom  ~ 0
+W10Neuroticism_Mom ~ 0
+W11Neuroticism_Mom ~ 0
+W12Neuroticism_Mom ~ 0
+W13Neuroticism_Mom ~ 0
+
+# Latent Variable Variances
+W1Neuroticism_Mom  ~~ 1*W1Neuroticism_Mom
+W3Neuroticism_Mom  ~~ 1*W3Neuroticism_Mom
+W5Neuroticism_Mom  ~~ 1*W5Neuroticism_Mom
+W7Neuroticism_Mom  ~~ 1*W7Neuroticism_Mom
+W10Neuroticism_Mom ~~ 1*W10Neuroticism_Mom
+W11Neuroticism_Mom ~~ 1*W11Neuroticism_Mom
+W12Neuroticism_Mom ~~ 1*W12Neuroticism_Mom
+W13Neuroticism_Mom ~~ 1*W13Neuroticism_Mom
+
+#Parcel Intercepts ## Note the change in the Strong MI model:
+m01_N1 ~ 1
+m01_N2 ~ 1
+m01_N3 ~ 1
+
+m03_N1 ~ 1
+m03_N2 ~ 1
+m03_N3 ~ 1
+
+m05_N1 ~ 1
+m05_N2 ~ 1
+m05_N3 ~ 1
+
+m07_N1 ~ 1
+m07_N2 ~ 1
+m07_N3 ~ 1
+
+m10_N1 ~ mintercept1*1
+m10_N2 ~ mintercept2*1
+m10_N3 ~ mintercept3*1
+
+m11_N1 ~ mintercept1*1
+m11_N2 ~ mintercept2*1
+m11_N3 ~ mintercept3*1
+
+m12_N1 ~ 1
+m12_N2 ~ 1
+m12_N3 ~ 1
+
+m13_N1 ~ 1
+m13_N2 ~ 1
+m13_N3 ~ 1
+
+# Parcel variances
+m01_N1 ~~ m01_N1
+m01_N2 ~~ m01_N2
+m01_N3 ~~ m01_N3
+
+m03_N1 ~~ m03_N1
+m03_N2 ~~ m03_N2
+m03_N3 ~~ m03_N3
+
+m05_N1 ~~ m05_N1
+m05_N2 ~~ m05_N2
+m05_N3 ~~ m05_N3
+
+m07_N1 ~~ m07_N1
+m07_N2 ~~ m07_N2
+m07_N3 ~~ m07_N3
+
+m10_N1 ~~ m10_N1
+m10_N2 ~~ m10_N2
+m10_N3 ~~ m10_N3
+
+m11_N1 ~~ m11_N1
+m11_N2 ~~ m11_N2
+m11_N3 ~~ m11_N3
+
+m12_N1 ~~ m12_N1
+m12_N2 ~~ m12_N2
+m12_N3 ~~ m12_N3
+
+m13_N1 ~~ m13_N1
+m13_N2 ~~ m13_N2
+m13_N3 ~~ m13_N3
+
+# Parcel residual covariances
+m01_N1 ~~ m03_N1 + m05_N1 + m07_N1 + m10_N1 + m11_N1 + m12_N1 + m13_N1
+m01_N2 ~~ m03_N2 + m05_N2 + m07_N2 + m10_N2 + m11_N2 + m12_N2 + m13_N2
+m01_N3 ~~ m03_N3 + m05_N3 + m07_N3 + m10_N3 + m11_N3 + m12_N3 + m13_N3
+
+m03_N1 ~~ m05_N1 + m07_N1 + m10_N1 + m11_N1 + m12_N1 + m13_N1
+m03_N2 ~~ m05_N2 + m07_N2 + m10_N2 + m11_N2 + m12_N2 + m13_N2
+m03_N3 ~~ m05_N3 + m07_N3 + m10_N3 + m11_N3 + m12_N3 + m13_N3
+
+m05_N1 ~~ m07_N1 + m10_N1 + m11_N1 + m12_N1 + m13_N1
+m05_N2 ~~ m07_N2 + m10_N2 + m11_N2 + m12_N2 + m13_N2
+m05_N3 ~~ m07_N3 + m10_N3 + m11_N3 + m12_N3 + m13_N3
+
+m07_N1 ~~ m10_N1 + m11_N1 + m12_N1 + m13_N1
+m07_N2 ~~ m10_N2 + m11_N2 + m12_N2 + m13_N2
+m07_N3 ~~ m10_N3 + m11_N3 + m12_N3 + m13_N3
+
+m10_N1 ~~ m11_N1 + m12_N1 + m13_N1
+m10_N2 ~~ m11_N2 + m12_N2 + m13_N2
+m10_N3 ~~ m11_N3 + m12_N3 + m13_N3
+
+m11_N1 ~~ m12_N1 + m13_N1
+m11_N2 ~~ m12_N2 + m13_N2
+m11_N3 ~~ m12_N3 + m13_N3
+
+m12_N1 ~~ m13_N1
+m12_N2 ~~ m13_N2
+m12_N3 ~~ m13_N3
+
+##Univariate Growth Curve Stuff:
+MomNeuroticismIntercept =~ 1*W1Neuroticism_Mom+1*W3Neuroticism_Mom+1*W5Neuroticism_Mom+1*W7Neuroticism_Mom+1*W10Neuroticism_Mom+1*W11Neuroticism_Mom+1*W12Neuroticism_Mom+1*W13Neuroticism_Mom
+
+MomNeuroticismSlope =~ -0.764*W1Neuroticism_Mom+-0.569*W3Neuroticism_Mom+-0.374*W5Neuroticism_Mom+-0.17*W7Neuroticism_Mom+0.136*W10Neuroticism_Mom+0.324*W11Neuroticism_Mom+0.468*W12Neuroticism_Mom+0.764*W13Neuroticism_Mom
+
+MomNeuroticismIntercept ~ 1
+MomNeuroticismSlope ~ 1
+
+MomNeuroticismIntercept ~~ MomNeuroticismIntercept
+MomNeuroticismSlope ~~ MomNeuroticismSlope
+MomNeuroticismIntercept ~~ MomNeuroticismSlope
+"
+```
+
+##### DAD Neuroticism UNIVARIATE FULL
+
+```{r}
+Dad_Neuroticism_Univariate_Full <- "## ----------------- DAD UNIVARIATE FULL ------------
+#Latent Variables:
+W1Neuroticism_Dad  =~ NA*d01_N1 + dlambda0*d01_N1 + dlambda1*d01_N2 + dlambda2*d01_N3
+W3Neuroticism_Dad  =~ NA*d03_N1 + dlambda1*d03_N2 + dlambda2*d03_N3
+W5Neuroticism_Dad  =~ NA*d05_N1 + dlambda1*d05_N2 + dlambda2*d05_N3
+W7Neuroticism_Dad  =~ NA*d07_N1 + dlambda1*d07_N2 + dlambda2*d07_N3
+W11Neuroticism_Dad =~ NA*d11_N1 + dlambda0*d11_N1 + d11_N2 + dlambda2*d11_N3
+W12Neuroticism_Dad =~ NA*d12_N1 + dlambda0*d12_N1 + d12_N2 + dlambda2*d12_N3
+W13Neuroticism_Dad =~ NA*d13_N1 + dlambda0*d13_N1 + d13_N2 + dlambda2*d13_N3
+
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Neuroticism_Dad  ~ 0
+W3Neuroticism_Dad  ~ 0
+W5Neuroticism_Dad  ~ 0
+W7Neuroticism_Dad  ~ 0
+W11Neuroticism_Dad ~ 0
+W12Neuroticism_Dad ~ 0
+W13Neuroticism_Dad ~ 0
+
+# Latent Variable Variances
+W1Neuroticism_Dad  ~~ 1*W1Neuroticism_Dad
+W3Neuroticism_Dad  ~~ 1*W3Neuroticism_Dad
+W5Neuroticism_Dad  ~~ 1*W5Neuroticism_Dad
+W7Neuroticism_Dad  ~~ 1*W7Neuroticism_Dad
+W11Neuroticism_Dad ~~ 1*W11Neuroticism_Dad
+W12Neuroticism_Dad ~~ 1*W12Neuroticism_Dad
+W13Neuroticism_Dad ~~ 1*W13Neuroticism_Dad
+
+#Parcel Intercepts
+d01_N1 ~ 1
+d01_N2 ~ 1
+d01_N3 ~ 1
+
+d03_N1 ~ 1
+d03_N2 ~ 1
+d03_N3 ~ 1
+
+d05_N1 ~ 1
+d05_N2 ~ 1
+d05_N3 ~ 1
+
+d07_N1 ~ 1
+d07_N2 ~ 1
+d07_N3 ~ 1
+
+d11_N1 ~ 1
+d11_N2 ~ 1
+d11_N3 ~ 1
+
+d12_N1 ~ dintercept1*1
+d12_N2 ~ 1
+d12_N3 ~ 1
+
+d13_N1 ~ dintercept1*1
+d13_N2 ~ 1
+d13_N3 ~ 1
+
+# Parcel variances
+d01_N1 ~~ d01_N1
+d01_N2 ~~ d01_N2
+d01_N3 ~~ d01_N3
+
+d03_N1 ~~ d03_N1
+d03_N2 ~~ d03_N2
+d03_N3 ~~ d03_N3
+
+d05_N1 ~~ d05_N1
+d05_N2 ~~ d05_N2
+d05_N3 ~~ d05_N3
+
+d07_N1 ~~ d07_N1
+d07_N2 ~~ d07_N2
+d07_N3 ~~ d07_N3
+
+d11_N1 ~~ d11_N1
+d11_N2 ~~ d11_N2
+d11_N3 ~~ d11_N3
+
+d12_N1 ~~ d12_N1
+d12_N2 ~~ d12_N2
+d12_N3 ~~ d12_N3
+
+d13_N1 ~~ d13_N1
+d13_N2 ~~ d13_N2
+d13_N3 ~~ d13_N3
+
+# Parcel residual covariances
+d01_N1 ~~ d03_N1 + d05_N1 + d07_N1 + d11_N1 + d12_N1 + d13_N1
+d01_N2 ~~ d03_N2 + d05_N2 + d07_N2 + d11_N2 + d12_N2 + d13_N2
+d01_N3 ~~ d03_N3 + d05_N3 + d07_N3 + d11_N3 + d12_N3 + d13_N3
+
+d03_N1 ~~ d05_N1 + d07_N1 + d11_N1 + d12_N1 + d13_N1
+d03_N2 ~~ d05_N2 + d07_N2 + d11_N2 + d12_N2 + d13_N2
+d03_N3 ~~ d05_N3 + d07_N3 + d11_N3 + d12_N3 + d13_N3
+
+d05_N1 ~~ d07_N1 + d11_N1 + d12_N1 + d13_N1
+d05_N2 ~~ d07_N2 + d11_N2 + d12_N2 + d13_N2
+d05_N3 ~~ d07_N3 + d11_N3 + d12_N3 + d13_N3
+
+d07_N1 ~~ d11_N1 + d12_N1 + d13_N1
+d07_N2 ~~ d11_N2 + d12_N2 + d13_N2
+d07_N3 ~~ d11_N3 + d12_N3 + d13_N3
+
+
+d11_N1 ~~ d12_N1 + d13_N1
+d11_N2 ~~ d12_N2 + d13_N2
+d11_N3 ~~ d12_N3 + d13_N3
+
+d12_N1 ~~ d13_N1
+d12_N2 ~~ d13_N2
+d12_N3 ~~ d13_N3
+
+##Univariate Growth Curve Stuff:
+DadNeuroticismIntercept =~ 1*W1Neuroticism_Dad+1*W3Neuroticism_Dad+1*W5Neuroticism_Dad+1*W7Neuroticism_Dad+1*W11Neuroticism_Dad+1*W12Neuroticism_Dad+1*W13Neuroticism_Dad
+
+DadNeuroticismSlope =~ -0.764*W1Neuroticism_Dad+-0.569*W3Neuroticism_Dad+-0.374*W5Neuroticism_Dad+-0.17*W7Neuroticism_Dad+0.324*W11Neuroticism_Dad+0.468*W12Neuroticism_Dad+0.764*W13Neuroticism_Dad
+
+DadNeuroticismIntercept ~ 1
+DadNeuroticismSlope ~ 1
+
+DadNeuroticismIntercept ~~ DadNeuroticismIntercept
+DadNeuroticismSlope ~~ DadNeuroticismSlope
+DadNeuroticismIntercept ~~ DadNeuroticismSlope
+"
+```
+
+### Strictly Overlapping Models:
+
+##### MOM Neuroticism UNIVARIATE Overlap
+
+```{r}
+Mom_Univariate_Neuroticism_Overlap <- " #----------------- MOM Univariate OVERLAP -----------
+#Latent Variables:
+W5Neuroticism_Mom  =~ NA*m05_N1 + mlambda1*m05_N2 + mlambda2*m05_N3
+W7Neuroticism_Mom  =~ NA*m07_N1 + mlambda1*m07_N2 + mlambda2*m07_N3
+W10Neuroticism_Mom =~ NA*m10_N1 + mlambda0*m10_N1 + m10_N2 + mlambda2*m10_N3
+W11Neuroticism_Mom =~ NA*m11_N1 + mlambda0*m11_N1 + m11_N2 + mlambda2*m11_N3
+W12Neuroticism_Mom =~ NA*m12_N1 + mlambda0*m12_N1 + mlambda1*m12_N2 + mlambda2*m12_N3
+W13Neuroticism_Mom =~ NA*m13_N1 + mlambda0*m13_N1 + mlambda1*m13_N2 + mlambda2*m13_N3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Neuroticism_Mom  ~ 0
+W7Neuroticism_Mom  ~ 0
+W10Neuroticism_Mom ~ 0
+W11Neuroticism_Mom ~ 0
+W12Neuroticism_Mom ~ 0
+W13Neuroticism_Mom ~ 0
+
+# Latent Variable Variances
+W5Neuroticism_Mom  ~~ 1*W5Neuroticism_Mom
+W7Neuroticism_Mom  ~~ 1*W7Neuroticism_Mom
+W10Neuroticism_Mom ~~ 1*W10Neuroticism_Mom
+W11Neuroticism_Mom ~~ 1*W11Neuroticism_Mom
+W12Neuroticism_Mom ~~ 1*W12Neuroticism_Mom
+W13Neuroticism_Mom ~~ 1*W13Neuroticism_Mom
+
+#Parcel Intercepts
+m05_N1 ~ 1
+m05_N2 ~ 1
+m05_N3 ~ 1
+
+m07_N1 ~ 1
+m07_N2 ~ 1
+m07_N3 ~ 1
+
+m10_N1 ~ mintercept1*1
+m10_N2 ~ mintercept2*1
+m10_N3 ~ mintercept3*1
+
+m11_N1 ~ mintercept1*1
+m11_N2 ~ 1
+m11_N3 ~ mintercept3*1
+
+m12_N1 ~ 1
+m12_N2 ~ 1
+m12_N3 ~ 1
+
+m13_N1 ~ 1
+m13_N2 ~ mintercept2*1
+m13_N3 ~ 1
+
+
+# Parcel variances
+
+m05_N1 ~~ m05_N1
+m05_N2 ~~ m05_N2
+m05_N3 ~~ m05_N3
+
+m07_N1 ~~ m07_N1
+m07_N2 ~~ m07_N2
+m07_N3 ~~ m07_N3
+
+m10_N1 ~~ m10_N1
+m10_N2 ~~ m10_N2
+m10_N3 ~~ m10_N3
+
+m11_N1 ~~ m11_N1
+m11_N2 ~~ m11_N2
+m11_N3 ~~ m11_N3
+
+m12_N1 ~~ m12_N1
+m12_N2 ~~ m12_N2
+m12_N3 ~~ m12_N3
+
+m13_N1 ~~ m13_N1
+m13_N2 ~~ m13_N2
+m13_N3 ~~ m13_N3
+
+# Parcel residual covariances
+m05_N1 ~~ m07_N1 + m10_N1 + m11_N1 + m12_N1 + m13_N1
+m05_N2 ~~ m07_N2 + m10_N2 + m11_N2 + m12_N2 + m13_N2
+m05_N3 ~~ m07_N3 + m10_N3 + m11_N3 + m12_N3 + m13_N3
+
+m07_N1 ~~ m10_N1 + m11_N1 + m12_N1 + m13_N1
+m07_N2 ~~ m10_N2 + m11_N2 + m12_N2 + m13_N2
+m07_N3 ~~ m10_N3 + m11_N3 + m12_N3 + m13_N3
+
+m10_N1 ~~ m11_N1 + m12_N1 + m13_N1
+m10_N2 ~~ m11_N2 + m12_N2 + m13_N2
+m10_N3 ~~ m11_N3 + m12_N3 + m13_N3
+
+m11_N1 ~~ m12_N1 + m13_N1
+m11_N2 ~~ m12_N2 + m13_N2
+m11_N3 ~~ m12_N3 + m13_N3
+
+m12_N1 ~~ m13_N1
+m12_N2 ~~ m13_N2
+m12_N3 ~~ m13_N3
+
+##Univariate Growth Curve Stuff:
+MomNeuroticismIntercept =~ W5Neuroticism_Mom+1*W7Neuroticism_Mom+1*W10Neuroticism_Mom+1*W11Neuroticism_Mom+1*W12Neuroticism_Mom+1*W13Neuroticism_Mom
+
+MomNeuroticismSlope =~ -0.569*W5Neuroticism_Mom+-0.364*W7Neuroticism_Mom+-0.059*W10Neuroticism_Mom+0.13*W11Neuroticism_Mom+0.274*W12Neuroticism_Mom+0.569*W13Neuroticism_Mom
+
+MomNeuroticismIntercept ~ 0*1
+MomNeuroticismSlope ~ 1
+
+MomNeuroticismIntercept ~~ MomNeuroticismIntercept
+MomNeuroticismSlope ~~ MomNeuroticismSlope
+MomNeuroticismIntercept ~~ MomNeuroticismSlope
+"
+```
+
+##### DAD Neuroticism UNIVARIATE Overlap
+
+```{r}
+Dad_Univariate_Neuroticism_Overlap <- " #---------- Dad Uni Consci Overlap -----------
+#Latent Variables:
+W5Neuroticism_Dad  =~ NA*d05_N1 + dlambda1*d05_N2 + dlambda2*d05_N3
+W7Neuroticism_Dad  =~ NA*d07_N1 + dlambda1*d07_N2 + dlambda2*d07_N3
+W11Neuroticism_Dad =~ NA*d11_N1 + dlambda0*d11_N1 + d11_N2 + dlambda2*d11_N3
+W12Neuroticism_Dad =~ NA*d12_N1 + dlambda0*d12_N1 + d12_N2 + dlambda2*d12_N3
+W13Neuroticism_Dad =~ NA*d13_N1 + dlambda0*d13_N1 + d13_N2 + dlambda2*d13_N3
+
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Neuroticism_Dad  ~ 0
+W7Neuroticism_Dad  ~ 0
+W11Neuroticism_Dad ~ 0
+W12Neuroticism_Dad ~ 0
+W13Neuroticism_Dad ~ 0
+
+# Latent Variable Variances
+W5Neuroticism_Dad  ~~ 1*W5Neuroticism_Dad
+W7Neuroticism_Dad  ~~ 1*W7Neuroticism_Dad
+W11Neuroticism_Dad ~~ 1*W11Neuroticism_Dad
+W12Neuroticism_Dad ~~ 1*W12Neuroticism_Dad
+W13Neuroticism_Dad ~~ 1*W13Neuroticism_Dad
+
+#Parcel Intercepts
+
+d05_N1 ~ 1
+d05_N2 ~ dintercept2*1
+d05_N3 ~ 1
+
+d07_N1 ~ 1
+d07_N2 ~ 1
+d07_N3 ~ 1
+
+d11_N1 ~ 1
+d11_N2 ~ 1
+d11_N3 ~ 1
+
+d12_N1 ~ dintercept1*1
+d12_N2 ~ 1
+d12_N3 ~ 1
+
+d13_N1 ~ dintercept1*1
+d13_N2 ~ 1
+d13_N3 ~ 1
+
+# Parcel variances
+d05_N1 ~~ d05_N1
+d05_N2 ~~ d05_N2
+d05_N3 ~~ d05_N3
+
+d07_N1 ~~ d07_N1
+d07_N2 ~~ d07_N2
+d07_N3 ~~ d07_N3
+
+d11_N1 ~~ d11_N1
+d11_N2 ~~ d11_N2
+d11_N3 ~~ d11_N3
+
+d12_N1 ~~ d12_N1
+d12_N2 ~~ d12_N2
+d12_N3 ~~ d12_N3
+
+d13_N1 ~~ d13_N1
+d13_N2 ~~ d13_N2
+d13_N3 ~~ d13_N3
+
+# Parcel residual covariances
+d05_N1 ~~ d07_N1 + d11_N1 + d12_N1 + d13_N1
+d05_N2 ~~ d07_N2 + d11_N2 + d12_N2 + d13_N2
+d05_N3 ~~ d07_N3 + d11_N3 + d12_N3 + d13_N3
+
+d07_N1 ~~ d11_N1 + d12_N1 + d13_N1
+d07_N2 ~~ d11_N2 + d12_N2 + d13_N2
+d07_N3 ~~ d11_N3 + d12_N3 + d13_N3
+
+d11_N1 ~~ d12_N1 + d13_N1
+d11_N2 ~~ d12_N2 + d13_N2
+d11_N3 ~~ d12_N3 + d13_N3
+
+d12_N1 ~~ d13_N1
+d12_N2 ~~ d13_N2
+d12_N3 ~~ d13_N3
+
+##Univariate Growth Curve Stuff:
+DadNeuroticismIntercept =~ 1*W5Neuroticism_Dad+1*W7Neuroticism_Dad+1*W11Neuroticism_Dad+1*W12Neuroticism_Dad+1*W13Neuroticism_Dad
+
+DadNeuroticismSlope =~ -0.569*W5Neuroticism_Dad+-0.364*W7Neuroticism_Dad+0.13*W11Neuroticism_Dad+0.274*W12Neuroticism_Dad+0.569*W13Neuroticism_Dad
+
+DadNeuroticismIntercept ~ 0
+DadNeuroticismSlope ~ 1
+
+DadNeuroticismIntercept ~~ DadNeuroticismIntercept
+DadNeuroticismSlope ~~ DadNeuroticismSlope
+DadNeuroticismIntercept ~~ DadNeuroticismSlope
+"
+```
+
+## -------- OPENNESS --------
+
+### Full Trajectory Models:
+
+##### CHILD Opennesss UNIVARIATE
+
+```{r}
+Child_Univariate_Opennesss <- "
+#Latent Variables:
+W5Opennesss_Child  =~ NA*c05_O1 + clambda0*c05_O1 + clambda1*c05_O2 + clambda2*c05_O3
+W7Opennesss_Child  =~ NA*c07_O1 + clambda0*c07_O1 + clambda1*c07_O2 + clambda2*c07_O3
+W10Opennesss_Child =~ NA*c10_O1 + clambda0*c10_O1 + clambda1*c10_O2 + clambda2*c10_O3
+W11Opennesss_Child =~ NA*c11_O1 + clambda0*c11_O1 + clambda1*c11_O2 + clambda2*c11_O3
+W12Opennesss_Child =~ NA*c12_O1 + clambda0*c12_O1 + clambda1*c12_O2 + clambda2*c12_O3
+W13Opennesss_Child =~ NA*c13_O1 + clambda0*c13_O1 + c13_O2 + clambda2*c13_O3
+
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Opennesss_Child  ~ 0
+W7Opennesss_Child  ~ 0
+W10Opennesss_Child ~ 0
+W11Opennesss_Child ~ 0
+W12Opennesss_Child ~ 0
+W13Opennesss_Child ~ 0
+
+# Latent Variable Variances
+W5Opennesss_Child  ~~ 1*W5Opennesss_Child
+W7Opennesss_Child  ~~ 1*W7Opennesss_Child
+W10Opennesss_Child ~~ 1*W10Opennesss_Child
+W11Opennesss_Child ~~ 1*W11Opennesss_Child
+W12Opennesss_Child ~~ 1*W12Opennesss_Child
+W13Opennesss_Child ~~ 1*W13Opennesss_Child
+
+#Parcel Intercepts
+c05_O1 ~ 1
+c05_O2 ~ 1
+c05_O3 ~ cintercept3*1
+
+c07_O1 ~ 1
+c07_O2 ~ 1
+c07_O3 ~ cintercept3*1
+
+c10_O1 ~ 1
+c10_O2 ~ 1
+c10_O3 ~ cintercept3*1
+
+c11_O1 ~ cintercept1*1
+c11_O2 ~ 1
+c11_O3 ~ 1
+
+c12_O1 ~ cintercept1*1
+c12_O2 ~ 1
+c12_O3 ~ cintercept3*1
+
+c13_O1 ~ 1
+c13_O2 ~ 1
+c13_O3 ~ 1
+
+# Parcel variances
+c05_O1 ~~ c05_O1
+c05_O2 ~~ c05_O2
+c05_O3 ~~ c05_O3
+
+c07_O1 ~~ c07_O1
+c07_O2 ~~ c07_O2
+c07_O3 ~~ c07_O3
+
+c10_O1 ~~ c10_O1
+c10_O2 ~~ c10_O2
+c10_O3 ~~ c10_O3
+
+c11_O1 ~~ c11_O1
+c11_O2 ~~ c11_O2
+c11_O3 ~~ c11_O3
+
+c12_O1 ~~ c12_O1
+c12_O2 ~~ c12_O2
+c12_O3 ~~ c12_O3
+
+c13_O1 ~~ c13_O1
+c13_O2 ~~ c13_O2
+c13_O3 ~~ c13_O3
+
+# Parcel residual covariances
+c05_O1 ~~ c07_O1 + c10_O1 + c11_O1 + c12_O1 + c13_O1
+c05_O2 ~~ c07_O2 + c10_O2 + c11_O2 + c12_O2 + c13_O2
+c05_O3 ~~ c07_O3 + c10_O3 + c11_O3 + c12_O3 + c13_O3
+
+c07_O1 ~~ c10_O1 + c11_O1 + c12_O1 + c13_O1
+c07_O2 ~~ c10_O2 + c11_O2 + c12_O2 + c13_O2
+c07_O3 ~~ c10_O3 + c11_O3 + c12_O3 + c13_O3
+
+c10_O1 ~~ c11_O1 + c12_O1 + c13_O1
+c10_O2 ~~ c11_O2 + c12_O2 + c13_O2
+c10_O3 ~~ c11_O3 + c12_O3 + c13_O3
+
+c11_O1 ~~ c12_O1 + c13_O1
+c11_O2 ~~ c12_O2 + c13_O2
+c11_O3 ~~ c12_O3 + c13_O3
+
+c12_O1 ~~ c13_O1
+c12_O2 ~~ c13_O2
+c12_O3 ~~ c13_O3
+
+##Univariate Growth Curve Stuff:
+ChildOpennesssIntercept =~ 1*W5Opennesss_Child+1*W7Opennesss_Child+1*W10Opennesss_Child+1*W11Opennesss_Child+1*W12Opennesss_Child+1*W13Opennesss_Child
+
+ChildOpennesssSlope =~ -0.569*W5Opennesss_Child+-0.364*W7Opennesss_Child+-0.059*W10Opennesss_Child+0.13*W11Opennesss_Child+0.274*W12Opennesss_Child+0.569*W13Opennesss_Child
+
+ChildOpennesssIntercept ~ 1
+ChildOpennesssSlope ~ 1
+
+ChildOpennesssIntercept ~~ ChildOpennesssIntercept
+ChildOpennesssSlope ~~ ChildOpennesssSlope
+ChildOpennesssIntercept ~~ ChildOpennesssSlope
+"
+```
+
+##### MOM Opennesss UNIVARIATE FULL
+
+```{r}
+Mom_Univariate_Opennesss_Full <- " #----------------- MOM Univariate Full -----------
+#Latent Variables:
+W1Opennesss_Mom  =~ NA*m01_O1 + mlambda1*m01_O2 + mlambda2*m01_O3
+W3Opennesss_Mom  =~ NA*m03_O1 + mlambda1*m03_O2 + mlambda2*m03_O3
+W5Opennesss_Mom  =~ NA*m05_O1 + mlambda1*m05_O2 + mlambda2*m05_O3
+W7Opennesss_Mom  =~ NA*m07_O1 + mlambda1*m07_O2 + mlambda2*m07_O3
+W10Opennesss_Mom =~ NA*m10_O1 + mlambda0*m10_O1 + mlambda1*m10_O2 + mlambda2*m10_O3
+W11Opennesss_Mom =~ NA*m11_O1 + mlambda0*m11_O1 + mlambda1*m11_O2 + m11_O3
+W12Opennesss_Mom =~ NA*m12_O1 + mlambda0*m12_O1 + mlambda1*m12_O2 + m12_O3
+W13Opennesss_Mom =~ NA*m13_O1 + mlambda0*m13_O1 + mlambda1*m13_O2 + mlambda2*m13_O3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Opennesss_Mom  ~ 0
+W3Opennesss_Mom  ~ 0
+W5Opennesss_Mom  ~ 0
+W7Opennesss_Mom  ~ 0
+W10Opennesss_Mom ~ 0
+W11Opennesss_Mom ~ 0
+W12Opennesss_Mom ~ 0
+W13Opennesss_Mom ~ 0
+
+# Latent Variable Variances
+W1Opennesss_Mom  ~~ 1*W1Opennesss_Mom
+W3Opennesss_Mom  ~~ 1*W3Opennesss_Mom
+W5Opennesss_Mom  ~~ 1*W5Opennesss_Mom
+W7Opennesss_Mom  ~~ 1*W7Opennesss_Mom
+W10Opennesss_Mom ~~ 1*W10Opennesss_Mom
+W11Opennesss_Mom ~~ 1*W11Opennesss_Mom
+W12Opennesss_Mom ~~ 1*W12Opennesss_Mom
+W13Opennesss_Mom ~~ 1*W13Opennesss_Mom
+
+#Parcel Intercepts
+m01_O1 ~ 1
+m01_O2 ~ 1
+m01_O3 ~ 1
+
+m03_O1 ~ 1
+m03_O2 ~ 1
+m03_O3 ~ 1
+
+m05_O1 ~ 1
+m05_O2 ~ 1
+m05_O3 ~ mintercept3*1
+
+m07_O1 ~ 1
+m07_O2 ~ 1
+m07_O3 ~ mintercept3*1
+
+m10_O1 ~ mintercept1*1
+m10_O2 ~ 1
+m10_O3 ~ 1
+
+m11_O1 ~ 1
+m11_O2 ~ mintercept2*1
+m11_O3 ~ 1
+
+m12_O1 ~ 1
+m12_O2 ~ 1
+m12_O3 ~ 1
+
+m13_O1 ~ 1
+m13_O2 ~ 1
+m13_O3 ~ 1
+
+# Parcel variances
+m01_O1 ~~ m01_O1
+m01_O2 ~~ m01_O2
+m01_O3 ~~ m01_O3
+
+m03_O1 ~~ m03_O1
+m03_O2 ~~ m03_O2
+m03_O3 ~~ m03_O3
+
+m05_O1 ~~ m05_O1
+m05_O2 ~~ m05_O2
+m05_O3 ~~ m05_O3
+
+m07_O1 ~~ m07_O1
+m07_O2 ~~ m07_O2
+m07_O3 ~~ m07_O3
+
+m10_O1 ~~ m10_O1
+m10_O2 ~~ m10_O2
+m10_O3 ~~ m10_O3
+
+m11_O1 ~~ m11_O1
+m11_O2 ~~ m11_O2
+m11_O3 ~~ m11_O3
+
+m12_O1 ~~ m12_O1
+m12_O2 ~~ m12_O2
+m12_O3 ~~ m12_O3
+
+m13_O1 ~~ m13_O1
+m13_O2 ~~ m13_O2
+m13_O3 ~~ m13_O3
+
+# Parcel residual covariances
+m01_O1 ~~ m03_O1 + m05_O1 + m07_O1 + m10_O1 + m11_O1 + m12_O1 + m13_O1
+m01_O2 ~~ m03_O2 + m05_O2 + m07_O2 + m10_O2 + m11_O2 + m12_O2 + m13_O2
+m01_O3 ~~ m03_O3 + m05_O3 + m07_O3 + m10_O3 + m11_O3 + m12_O3 + m13_O3
+
+m03_O1 ~~ m05_O1 + m07_O1 + m10_O1 + m11_O1 + m12_O1 + m13_O1
+m03_O2 ~~ m05_O2 + m07_O2 + m10_O2 + m11_O2 + m12_O2 + m13_O2
+m03_O3 ~~ m05_O3 + m07_O3 + m10_O3 + m11_O3 + m12_O3 + m13_O3
+
+m05_O1 ~~ m07_O1 + m10_O1 + m11_O1 + m12_O1 + m13_O1
+m05_O2 ~~ m07_O2 + m10_O2 + m11_O2 + m12_O2 + m13_O2
+m05_O3 ~~ m07_O3 + m10_O3 + m11_O3 + m12_O3 + m13_O3
+
+m07_O1 ~~ m10_O1 + m11_O1 + m12_O1 + m13_O1
+m07_O2 ~~ m10_O2 + m11_O2 + m12_O2 + m13_O2
+m07_O3 ~~ m10_O3 + m11_O3 + m12_O3 + m13_O3
+
+m10_O1 ~~ m11_O1 + m12_O1 + m13_O1
+m10_O2 ~~ m11_O2 + m12_O2 + m13_O2
+m10_O3 ~~ m11_O3 + m12_O3 + m13_O3
+
+m11_O1 ~~ m12_O1 + m13_O1
+m11_O2 ~~ m12_O2 + m13_O2
+m11_O3 ~~ m12_O3 + m13_O3
+
+m12_O1 ~~ m13_O1
+m12_O2 ~~ m13_O2
+m12_O3 ~~ m13_O3
+
+##Univariate Growth Curve Stuff:
+MomOpennesssIntercept =~ 1*W1Opennesss_Mom+1*W3Opennesss_Mom+1*W5Opennesss_Mom+1*W7Opennesss_Mom+1*W10Opennesss_Mom+1*W11Opennesss_Mom+ 1*W12Opennesss_Mom+1*W13Opennesss_Mom
+
+MomOpennesssSlope =~ -0.764*W1Opennesss_Mom+-0.569*W3Opennesss_Mom+-0.374*W5Opennesss_Mom+-0.17*W7Opennesss_Mom+0.136*W10Opennesss_Mom+0.324*W11Opennesss_Mom+0.468*W12Opennesss_Mom+0.764*W13Opennesss_Mom
+
+MomOpennesssIntercept ~ 1
+MomOpennesssSlope ~ 1
+
+MomOpennesssIntercept ~~ MomOpennesssIntercept
+MomOpennesssSlope ~~ MomOpennesssSlope
+MomOpennesssIntercept ~~ MomOpennesssSlope
+"
+```
+
+##### DAD Opennesss UNIVARIATE FULL
+
+```{r}
+Dad_Opennesss_Univariate_Full <- "## ----------------- DAD UNIVARIATE FULL ------------
+W1Opennesss_Dad  =~ NA*d01_O1 + dlambda0*d01_O1 + dlambda1*d01_O2 + dlambda2*d01_O3
+W3Opennesss_Dad  =~ NA*d03_O1 + dlambda0*d03_O1 + dlambda1*d03_O2 + dlambda2*d03_O3
+W5Opennesss_Dad  =~ NA*d05_O1 + dlambda0*d05_O1 + dlambda1*d05_O2 + dlambda2*d05_O3
+W7Opennesss_Dad  =~ NA*d07_O1 + dlambda0*d07_O1 + dlambda1*d07_O2 + dlambda2*d07_O3
+W11Opennesss_Dad =~ NA*d11_O1 + dlambda1*d11_O2 + dlambda2*d11_O3
+W12Opennesss_Dad =~ NA*d12_O1 + dlambda1*d12_O2 + dlambda2*d12_O3
+W13Opennesss_Dad =~ NA*d13_O1 + dlambda1*d13_O2 + dlambda2*d13_O3
+
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W1Opennesss_Dad  ~ 0
+W3Opennesss_Dad  ~ 0
+W5Opennesss_Dad  ~ 0
+W7Opennesss_Dad  ~ 0
+W11Opennesss_Dad ~ 0
+W12Opennesss_Dad ~ 0
+W13Opennesss_Dad ~ 0
+
+# Latent Variable Variances
+W1Opennesss_Dad  ~~ 1*W1Opennesss_Dad
+W3Opennesss_Dad  ~~ 1*W3Opennesss_Dad
+W5Opennesss_Dad  ~~ 1*W5Opennesss_Dad
+W7Opennesss_Dad  ~~ 1*W7Opennesss_Dad
+W11Opennesss_Dad ~~ 1*W11Opennesss_Dad
+W12Opennesss_Dad ~~ 1*W12Opennesss_Dad
+W13Opennesss_Dad ~~ 1*W13Opennesss_Dad
+
+#Parcel Intercepts
+d01_O1 ~ 1
+d01_O2 ~ 1
+d01_O3 ~ dintercept3*1
+
+d03_O1 ~ 1
+d03_O2 ~ 1
+d03_O3 ~ dintercept3*1
+
+d05_O1 ~ 1
+d05_O2 ~ 1
+d05_O3 ~ dintercept3*1
+
+d07_O1 ~ 1
+d07_O2 ~ 1
+d07_O3 ~ dintercept3*1
+
+d11_O1 ~ 1
+d11_O2 ~ 1
+d11_O3 ~ 1
+
+d12_O1 ~ 1
+d12_O2 ~ 1
+d12_O3 ~ 1
+
+d13_O1 ~ 1
+d13_O2 ~ 1
+d13_O3 ~ 1
+
+# Parcel variances
+d01_O1 ~~ d01_O1
+d01_O2 ~~ d01_O2
+d01_O3 ~~ d01_O3
+
+d03_O1 ~~ d03_O1
+d03_O2 ~~ d03_O2
+d03_O3 ~~ d03_O3
+
+d05_O1 ~~ d05_O1
+d05_O2 ~~ d05_O2
+d05_O3 ~~ d05_O3
+
+d07_O1 ~~ d07_O1
+d07_O2 ~~ d07_O2
+d07_O3 ~~ d07_O3
+
+d11_O1 ~~ d11_O1
+d11_O2 ~~ d11_O2
+d11_O3 ~~ d11_O3
+
+d12_O1 ~~ d12_O1
+d12_O2 ~~ d12_O2
+d12_O3 ~~ d12_O3
+
+d13_O1 ~~ d13_O1
+d13_O2 ~~ d13_O2
+d13_O3 ~~ d13_O3
+
+# Parcel residual covariances
+d01_O1 ~~ d03_O1 + d05_O1 + d07_O1 + d11_O1 + d12_O1 + d13_O1
+d01_O2 ~~ d03_O2 + d05_O2 + d07_O2 + d11_O2 + d12_O2 + d13_O2
+d01_O3 ~~ d03_O3 + d05_O3 + d07_O3 + d11_O3 + d12_O3 + d13_O3
+
+d03_O1 ~~ d05_O1 + d07_O1 + d11_O1 + d12_O1 + d13_O1
+d03_O2 ~~ d05_O2 + d07_O2 + d11_O2 + d12_O2 + d13_O2
+d03_O3 ~~ d05_O3 + d07_O3 + d11_O3 + d12_O3 + d13_O3
+
+d05_O1 ~~ d07_O1 + d11_O1 + d12_O1 + d13_O1
+d05_O2 ~~ d07_O2 + d11_O2 + d12_O2 + d13_O2
+d05_O3 ~~ d07_O3 + d11_O3 + d12_O3 + d13_O3
+
+d07_O1 ~~ d11_O1 + d12_O1 + d13_O1
+d07_O2 ~~ d11_O2 + d12_O2 + d13_O2
+d07_O3 ~~ d11_O3 + d12_O3 + d13_O3
+
+
+d11_O1 ~~ d12_O1 + d13_O1
+d11_O2 ~~ d12_O2 + d13_O2
+d11_O3 ~~ d12_O3 + d13_O3
+
+d12_O1 ~~ d13_O1
+d12_O2 ~~ d13_O2
+d12_O3 ~~ d13_O3
+
+##Univariate Growth Curve Stuff:
+DadOpennesssIntercept =~ 1*W1Opennesss_Dad+1*W3Opennesss_Dad+1*W5Opennesss_Dad+1*W7Opennesss_Dad+1*W11Opennesss_Dad+1*W12Opennesss_Dad+1*W13Opennesss_Dad
+
+DadOpennesssSlope =~ -0.764*W1Opennesss_Dad+-0.569*W3Opennesss_Dad+-0.374*W5Opennesss_Dad+-0.17*W7Opennesss_Dad+0.324*W11Opennesss_Dad+0.468*W12Opennesss_Dad+0.764*W13Opennesss_Dad
+
+DadOpennesssIntercept ~ 1
+DadOpennesssSlope ~ 1
+
+DadOpennesssIntercept ~~ DadOpennesssIntercept
+DadOpennesssSlope ~~ DadOpennesssSlope
+DadOpennesssIntercept ~~ DadOpennesssSlope
+"
+```
+
+### Strictly Overlapping Models:
+
+##### MOM Opennesss UNIVARIATE Overlap
+
+```{r}
+Mom_Univariate_Opennesss_Overlap <- " #----------------- MOM Univariate OVERLAP -----------
+#Latent Variables:
+W5Opennesss_Mom  =~ NA*m05_O1 + mlambda1*m05_O2 + m05_O3
+W7Opennesss_Mom  =~ NA*m07_O1 + mlambda1*m07_O2 + m07_O3
+W10Opennesss_Mom =~ NA*m10_O1 + mlambda1*m10_O2 + mlambda2*m10_O3
+W11Opennesss_Mom =~ NA*m11_O1 + mlambda1*m11_O2 + mlambda2*m11_O3
+W12Opennesss_Mom =~ NA*m12_O1 + mlambda0*m12_O1 + mlambda1*m12_O2 + mlambda2*m12_O3
+W13Opennesss_Mom =~ NA*m13_O1 + mlambda0*m13_O1 + mlambda1*m13_O2 + mlambda2*m13_O3
+
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Opennesss_Mom  ~ 0
+W7Opennesss_Mom  ~ 0
+W10Opennesss_Mom ~ 0
+W11Opennesss_Mom ~ 0
+W12Opennesss_Mom ~ 0
+W13Opennesss_Mom ~ 0
+
+# Latent Variable Variances
+W5Opennesss_Mom  ~~ 1*W5Opennesss_Mom
+W7Opennesss_Mom  ~~ 1*W7Opennesss_Mom
+W10Opennesss_Mom ~~ 1*W10Opennesss_Mom
+W11Opennesss_Mom ~~ 1*W11Opennesss_Mom
+W12Opennesss_Mom ~~ 1*W12Opennesss_Mom
+W13Opennesss_Mom ~~ 1*W13Opennesss_Mom
+
+#Parcel Intercepts
+m05_O1 ~ 1
+m05_O2 ~ 1
+m05_O3 ~ mintercept3*1
+
+m07_O1 ~ 1
+m07_O2 ~ 1
+m07_O3 ~ mintercept3*1
+
+m10_O1 ~ 1
+m10_O2 ~ mintercept2*1
+m10_O3 ~ 1
+
+m11_O1 ~ 1
+m11_O2 ~ mintercept2*1
+m11_O3 ~ 1
+
+m12_O1 ~ 1
+m12_O2 ~ 1
+m12_O3 ~ 1
+
+m13_O1 ~ 1
+m13_O2 ~ 1
+m13_O3 ~ 1
+
+# Parcel variances
+
+m05_O1 ~~ m05_O1
+m05_O2 ~~ m05_O2
+m05_O3 ~~ m05_O3
+
+m07_O1 ~~ m07_O1
+m07_O2 ~~ m07_O2
+m07_O3 ~~ m07_O3
+
+m10_O1 ~~ m10_O1
+m10_O2 ~~ m10_O2
+m10_O3 ~~ m10_O3
+
+m11_O1 ~~ m11_O1
+m11_O2 ~~ m11_O2
+m11_O3 ~~ m11_O3
+
+m12_O1 ~~ m12_O1
+m12_O2 ~~ m12_O2
+m12_O3 ~~ m12_O3
+
+m13_O1 ~~ m13_O1
+m13_O2 ~~ m13_O2
+m13_O3 ~~ m13_O3
+
+# Parcel residual covariances
+m05_O1 ~~ m07_O1 + m10_O1 + m11_O1 + m12_O1 + m13_O1
+m05_O2 ~~ m07_O2 + m10_O2 + m11_O2 + m12_O2 + m13_O2
+m05_O3 ~~ m07_O3 + m10_O3 + m11_O3 + m12_O3 + m13_O3
+
+m07_O1 ~~ m10_O1 + m11_O1 + m12_O1 + m13_O1
+m07_O2 ~~ m10_O2 + m11_O2 + m12_O2 + m13_O2
+m07_O3 ~~ m10_O3 + m11_O3 + m12_O3 + m13_O3
+
+m10_O1 ~~ m11_O1 + m12_O1 + m13_O1
+m10_O2 ~~ m11_O2 + m12_O2 + m13_O2
+m10_O3 ~~ m11_O3 + m12_O3 + m13_O3
+
+m11_O1 ~~ m12_O1 + m13_O1
+m11_O2 ~~ m12_O2 + m13_O2
+m11_O3 ~~ m12_O3 + m13_O3
+
+m12_O1 ~~ m13_O1
+m12_O2 ~~ m13_O2
+m12_O3 ~~ m13_O3
+
+##Univariate Growth Curve Stuff:
+MomOpennesssIntercept =~ W5Opennesss_Mom+1*W7Opennesss_Mom+1*W10Opennesss_Mom+1*W11Opennesss_Mom+1*W12Opennesss_Mom+1*W13Opennesss_Mom
+
+MomOpennesssSlope =~ -0.569*W5Opennesss_Mom+-0.364*W7Opennesss_Mom+-0.059*W10Opennesss_Mom+0.13*W11Opennesss_Mom+0.274*W12Opennesss_Mom+0.569*W13Opennesss_Mom
+
+MomOpennesssIntercept ~ 0*1
+MomOpennesssSlope ~ 1
+
+MomOpennesssIntercept ~~ MomOpennesssIntercept
+MomOpennesssSlope ~~ MomOpennesssSlope
+MomOpennesssIntercept ~~ MomOpennesssSlope
+"
+```
+
+##### DAD Opennesss UNIVARIATE Overlap
+
+```{r}
+Dad_Univariate_Opennesss_Overlap <- "
+#Latent Variables:
+W5Opennesss_Dad  =~ NA*d05_O1 + dlambda1*d05_O2 + d05_O3
+W7Opennesss_Dad  =~ NA*d07_O1 + dlambda1*d07_O2 + d07_O3
+W11Opennesss_Dad =~ NA*d11_O1 + dlambda0*d11_O1 + dlambda1*d11_O2 + dlambda2*d11_O3
+W12Opennesss_Dad =~ NA*d12_O1 + dlambda0*d12_O1 + dlambda1*d12_O2 + dlambda2*d12_O3
+W13Opennesss_Dad =~ NA*d13_O1 + dlambda0*d13_O1 + dlambda1*d13_O2 + dlambda2*d13_O3
+
+#Standardizing the latent variables to have a mean of 0 and a Var of 1:
+#Latent Variable Means:
+W5Opennesss_Dad  ~ 0
+W7Opennesss_Dad  ~ 0
+W11Opennesss_Dad ~ 0
+W12Opennesss_Dad ~ 0
+W13Opennesss_Dad ~ 0
+
+# Latent Variable Variances
+W5Opennesss_Dad  ~~ 1*W5Opennesss_Dad
+W7Opennesss_Dad  ~~ 1*W7Opennesss_Dad
+W11Opennesss_Dad ~~ 1*W11Opennesss_Dad
+W12Opennesss_Dad ~~ 1*W12Opennesss_Dad
+W13Opennesss_Dad ~~ 1*W13Opennesss_Dad
+
+#Parcel Intercepts
+
+d05_O1 ~ dintercept1*1
+d05_O2 ~ 1
+d05_O3 ~ dintercept3*1
+
+d07_O1 ~ dintercept1*1
+d07_O2 ~ 1
+d07_O3 ~ dintercept3*1
+
+d11_O1 ~ 1
+d11_O2 ~ dintercept2*1
+d11_O3 ~ 1
+
+d12_O1 ~ 1
+d12_O2 ~ 1
+d12_O3 ~ 1
+
+d13_O1 ~ 1
+d13_O2 ~ 1
+d13_O3 ~ 1
+
+# Parcel variances
+d05_O1 ~~ d05_O1
+d05_O2 ~~ d05_O2
+d05_O3 ~~ d05_O3
+
+d07_O1 ~~ d07_O1
+d07_O2 ~~ d07_O2
+d07_O3 ~~ d07_O3
+
+d11_O1 ~~ d11_O1
+d11_O2 ~~ d11_O2
+d11_O3 ~~ d11_O3
+
+d12_O1 ~~ d12_O1
+d12_O2 ~~ d12_O2
+d12_O3 ~~ d12_O3
+
+d13_O1 ~~ d13_O1
+d13_O2 ~~ d13_O2
+d13_O3 ~~ d13_O3
+
+# Parcel residual covariances
+d05_O1 ~~ d07_O1 + d11_O1 + d12_O1 + d13_O1
+d05_O2 ~~ d07_O2 + d11_O2 + d12_O2 + d13_O2
+d05_O3 ~~ d07_O3 + d11_O3 + d12_O3 + d13_O3
+
+d07_O1 ~~ d11_O1 + d12_O1 + d13_O1
+d07_O2 ~~ d11_O2 + d12_O2 + d13_O2
+d07_O3 ~~ d11_O3 + d12_O3 + d13_O3
+
+d11_O1 ~~ d12_O1 + d13_O1
+d11_O2 ~~ d12_O2 + d13_O2
+d11_O3 ~~ d12_O3 + d13_O3
+
+d12_O1 ~~ d13_O1
+d12_O2 ~~ d13_O2
+d12_O3 ~~ d13_O3
+
+
+##Univariate Growth Curve Stuff:
+DadOpennesssIntercept =~ 1*W5Opennesss_Dad+1*W7Opennesss_Dad+1*W11Opennesss_Dad+1*W12Opennesss_Dad+1*W13Opennesss_Dad
+
+DadOpennesssSlope =~ -0.569*W5Opennesss_Dad+-0.364*W7Opennesss_Dad+0.13*W11Opennesss_Dad+0.274*W12Opennesss_Dad+0.569*W13Opennesss_Dad
+
+
+DadOpennesssIntercept ~ 0
+DadOpennesssSlope ~ 1
+
+DadOpennesssIntercept ~~ DadOpennesssIntercept
+DadOpennesssSlope ~~ DadOpennesssSlope
+DadOpennesssIntercept ~~ DadOpennesssSlope
+"
+```
+
+# 2. Combining Models into a Single Table
+
+```{r}
+# Univariate Models
+# Full Models
+ExtraUnivariateFull <- list(Child_Univariate_Extraversion, Mom_Univariate_Extraversion_Full, Dad_Extraversion_Univariate_Full)
+AgreeUnivariateFull <- list(Child_Univariate_Agreeableness, Mom_Univariate_Agreeableness_Full, Dad_Agreeableness_Univariate_Full)
+ConsciUnivariateFull <- list(Child_Univariate_Conscientiousness, Mom_Univariate_Conscientiousness_Full, Dad_Conscientiousness_Univariate_Full)
+NeuroUnivariateFull <- list(Child_Univariate_Neuroticism, Mom_Univariate_Neuroticism_Full, Dad_Neuroticism_Univariate_Full)
+OpenUnivariateFull <- list(Child_Univariate_Opennesss, Mom_Univariate_Opennesss_Full, Dad_Opennesss_Univariate_Full)
+
+
+## Truncated parental trajectories for the overlap models
+ExtraUnivariateOverlap <- list(Mom_Univariate_Extraversion_Overlap, Dad_Univariate_Extraversion_Overlap)
+AgreeUnivariateOverlap <- list(Mom_Univariate_Agreeableness_Overlap, Dad_Univariate_Agreeableness_Overlap)
+ConsciUnivariateOverlap <- list(Mom_Univariate_Conscientiousness_Overlap, Dad_Univariate_Conscientiousness_Overlap)
+NeuroUnivariateOverlap <- list(Mom_Univariate_Neuroticism_Overlap, Dad_Univariate_Neuroticism_Overlap)
+OpenUnivariateOverlap <- list(Mom_Univariate_Opennesss_Overlap, Dad_Univariate_Opennesss_Overlap)
+
+#
+AllUnivariateModelsFull <- list(
+  ExtraUnivariateFull,
+  AgreeUnivariateFull,
+  ConsciUnivariateFull,
+  NeuroUnivariateFull,
+  OpenUnivariateFull
+)
+
+AllUnivariateModelsOverlap <- list(
+  ExtraUnivariateOverlap,
+  AgreeUnivariateOverlap,
+  ConsciUnivariateOverlap,
+  NeuroUnivariateOverlap,
+  OpenUnivariateOverlap
+)
+
+
+ALLUniMODELS <- list(AllUnivariateModelsFull, AllUnivariateModelsOverlap)
+
+B5Domains <- list(
+  "Extraversion",
+  "Agreeableness",
+  "Conscientiousness",
+  "Neuroticism",
+  "Opennesss"
+)
+
+MonadListFULL <- list("Child", "Mom", "Dad")
+MonadListOVERLAP <- list("Mom", "Dad")
+Modeltypes <- list("Full", "Overlap")
+
+
+UnivariateRows <- list()
+for (ModelTypeIndex in seq_along(Modeltypes)) {
+  for (DomainIndex in seq_along(B5Domains)) {
+    if (ModelTypeIndex == 1) {
+      ProperMonadList <- MonadListFULL
+    } else {
+      ProperMonadList <- MonadListOVERLAP
+    }
+
+    for (MonadIndex in seq_along(ProperMonadList)) {
+      Domain <- B5Domains[[DomainIndex]]
+      Monad <- ProperMonadList[[MonadIndex]]
+      Dyad1 <- Monad
+      Dyad2 <- Monad
+      LGCType <- "Univariate"
+      TrajectoryType <- Modeltypes[[ModelTypeIndex]]
+
+      LHSDomain <- Domain
+      RHS <- Domain
+
+      ModelString <- ALLUniMODELS[[ModelTypeIndex]][[DomainIndex]][[MonadIndex]]
+      row_df <- data.frame(Dyad1, Dyad2, LGCType, TrajectoryType, LHSDomain, RHS, ModelString)
+      UnivariateRows <- append(UnivariateRows, list(row_df))
+    }
+  }
+}
+
+UnivariateModels <- bind_rows(UnivariateRows)
+```
+
+```{r}
+nrow(UnivariateModels)
+UnivariateModels
+```
+
+```{r}
+save(UnivariateModels, file = "AllUnivariateModelsTable_LatentSlopeFactor_INCREMENTAL_7_16_2024.RData")
+```
+
+# 3. Fitting All Univariate Models
+
+This code allows us to get the the Slope-Intercept Correlations for all UniVar models:
+
+```{r}
+UnivariateModelFitObjects <- future_apply(UnivariateModels,
+  MARGIN = 1,
+  FUN = function(x) {
+    lavaan(
+      model = x[["ModelString"]], # lavaan and not growth()
+      data = ZSCORED,
+      missing = "fiml",
+      parallel = "multicore",
+      estimator = "MLR",
+      control = list(
+        iter.max = 300,
+        em.h1.iter.max = 500
+      )
+    ) # default
+  },
+  future.seed = TRUE
+)
+
+
+save(UnivariateModelFitObjects, file = "FittedUnivariateModelsObjects_INCREMENTAL_7_16_2024.RData")
+
+
+AllUnivariateStandardizedSolutions <- future_lapply(UnivariateModelFitObjects, FUN = {
+  function(x) standardizedsolution(x)
+}, future.seed = TRUE)
+length(AllUnivariateStandardizedSolutions)
+
+
+
+UnivariateModels$StandardizedSolution <- AllUnivariateStandardizedSolutions
+
+save(UnivariateModels, file = "AllUnivariateModelsWithStandardizedSolutions_INCREMENTAL_7_16_2024.RData")
+```
+
+## a. Extracting Univariate Parameters
+
+```{r}
+UnivariateModels
+```
+
+```{r}
+UnivariateModels$StandardizedSolution[[2]]
+```
+
+```{r}
+UnivariateModels$StandardizedSolution[[16]]
+```
+
+```{r}
+GetSlopeInterceptCorrelation <- function(row) {
+  # First, we record some values from the row in question
+  solution <- row$StandardizedSolution
+  person <- row$Dyad1
+  domain <- row$LHSDomain
+  TrajType <- row$TrajectoryType
+
+  # use the values above to get text that matches the LHS and RHS output
+
+  LatentInterceptText <- paste0(person, domain, "Intercept")
+  LatentSlopeText <- paste0(person, domain, "Slope")
+
+  # get the row
+  filtered_row <- solution |>
+    filter(
+      op == "~~",
+      lhs == LatentInterceptText,
+      rhs == LatentSlopeText
+    ) |>
+    select(lhs, op, rhs, est.std, pvalue, ci.lower, ci.upper)
+
+  print(filtered_row)
+
+  # add the relevant data back in: we aren't saving this to the original table; we are creating a new one.
+  NewRow <- filtered_row |>
+    mutate(
+      FamilyRole = person,
+      Domain = domain,
+      TrajectoryType = TrajType
+    )
+
+  return(NewRow)
+}
+
+UnivariateSlopeInterceptEstimateRows <- future_apply(UnivariateModels,
+  MARGIN = 1,
+  FUN = function(row) {
+    GetSlopeInterceptCorrelation(row)
+  }
+)
+UnivariateSlopeInterceptCorrelations <- do.call(rbind, UnivariateSlopeInterceptEstimateRows)
+UnivariateSlopeInterceptCorrelations
+write.csv(UnivariateSlopeInterceptCorrelations, "AllUnivariateInterceptSlopeCorrelations__FinalTable_7_16_2024.csv")
+# all univariate tables won't change by renaming the constraints
+```
+
+## b. Finalizing the Univariate Intercept-Slope Correlations (into a table)
+
+```{r}
+UnivariateSI_Table <- UnivariateSlopeInterceptCorrelations |>
+  select(TrajectoryType, FamilyRole, Domain, est.std, pvalue, ci.lower, ci.upper) |>
+  rename(
+    `Model Type` = TrajectoryType,
+    `Family Role` = FamilyRole,
+    `Correlation Coefficent` = est.std,
+    `p value` = pvalue,
+    `Lower CI` = ci.lower,
+    `Upper CI` = ci.upper
+  ) |>
+  mutate_if(is.numeric, round, digits = 2) |>
+  kable(
+    escape = F,
+    format = "html"
+  ) %>%
+  kable_classic(
+    full_width = F,
+    html_font = "Times New Roman"
+  )
+
+UnivariateSI_rows_to_bold <- which(UnivariateSlopeInterceptCorrelations$pvalue < 0.05)
+
+# Apply row formatting
+for (row in UnivariateSI_rows_to_bold) {
+  UnivariateSI_Table <- UnivariateSI_Table %>% row_spec(row, bold = TRUE)
+}
+
+# Print the table
+UnivariateSI_Table
+```
+
+```{r}
+UnivariateModels
+```
+
+# ----- Section 2: Bivariate Models ----- ----- ----- ----- ----- -----
+
+# 1. Braiding UNIVARIATE Models into BIVARIATE Models
+
+```{r}
+B5Domains <- list(
+  "Extraversion",
+  "Agreeableness",
+  "Conscientiousness",
+  "Neuroticism",
+  "Opennesss"
+)
+
+MonadListFULL <- list("Child", "Mom", "Dad")
+MonadListOVERLAP <- list("Mom", "Dad")
+Modeltypes <- list("Full", "Overlap")
+
+DyadsFull <- list(
+  list("Child", "Mom"),
+  list("Child", "Dad"),
+  list("Mom", "Dad")
+)
+
+DyadsOverlap <- list(
+  list("Child", "Mom"),
+  list("Child", "Dad")
+)
+
+BivariateRows <- list()
+
+for (ModelTypeIndex in seq_along(Modeltypes)) {
+  for (DomainIndex in seq_along(B5Domains)) {
+    for (DomainIndex2 in seq_along(B5Domains)) {
+      if (ModelTypeIndex == 1) {
+        ProperDyadList <- DyadsFull
+      } else {
+        ProperDyadList <- DyadsOverlap
+      }
+
+      for (DyadIndex in seq_along(ProperDyadList)) {
+        LHSDomain <- B5Domains[[DomainIndex]]
+        RHSDomain <- B5Domains[[DomainIndex2]]
+        Dyad <- ProperDyadList[[DyadIndex]]
+        Dyad1 <- Dyad[[1]]
+        Dyad2 <- Dyad[[2]]
+        LGCType <- "Bivariate"
+        TrajectoryType <- Modeltypes[[ModelTypeIndex]]
+
+        if (ModelTypeIndex == 1) {
+          LHS_STRING <- UnivariateModels |>
+            filter(
+              Dyad1 == Dyad[[1]],
+              TrajectoryType == Modeltypes[[ModelTypeIndex]],
+              LHSDomain == B5Domains[[DomainIndex]]
+            ) |>
+            select(ModelString) |>
+            pull(ModelString)
+        } # Extract the value as a string
+
+        else { ## when modelType ==2, we need the 'Full' Child trajectory and the Overlapped Parental Trajectory
+          LHS_STRING <- UnivariateModels |>
+            filter(
+              Dyad1 == Dyad[[1]],
+              TrajectoryType == Modeltypes[[1]],
+              LHSDomain == B5Domains[[DomainIndex]]
+            ) |>
+            select(ModelString) |>
+            pull(ModelString)
+        }
+
+        RHS_STRING <- UnivariateModels |>
+          filter(
+            Dyad1 == Dyad[[2]],
+            TrajectoryType == Modeltypes[[ModelTypeIndex]],
+            LHSDomain == B5Domains[[DomainIndex2]]
+          ) |>
+          select(ModelString) |>
+          pull(ModelString) # Extract the value as a string
+
+        if (ModelTypeIndex == 2 && DomainIndex == 1 && DomainIndex2 == 1) {
+          print(Dyad[[1]])
+          print(Dyad[[2]])
+          print(Modeltypes[[ModelTypeIndex]])
+          print(B5Domains[[DomainIndex]])
+          print(B5Domains[[DomainIndex2]])
+          cat(LHS_STRING)
+          cat(RHS_STRING)
+        }
+
+
+        CombinedModelString <- paste(LHS_STRING, RHS_STRING, sep = "\n")
+
+        ### now need to add the bivariate bits
+        Line1 <- "###Bivariate Bits:"
+        Line2 <- paste(paste0(Dyad1, LHSDomain, "Intercept"), "~~", paste0(Dyad2, RHSDomain, "Intercept"), sep = " ")
+        Line3 <- paste(paste0(Dyad1, LHSDomain, "Slope"), "~~", paste0(Dyad2, RHSDomain, "Slope"), sep = " ")
+        Line4 <- paste(paste0(Dyad1, LHSDomain, "Intercept"), "~~", paste0(Dyad2, RHSDomain, "Slope"), sep = " ")
+        Line5 <- paste(paste0(Dyad2, RHSDomain, "Intercept"), "~~", paste0(Dyad1, LHSDomain, "Slope"), sep = " ")
+
+
+
+        BivariateLines <- paste(Line1, Line2, Line3, Line4, Line5, sep = "\n")
+        # cat(BivariateLines)
+        # cat('\n')
+
+        WholeModel <- paste(CombinedModelString, BivariateLines, sep = "\n")
+
+        row_df <- data.frame(Dyad1, Dyad2, LGCType, TrajectoryType, LHSDomain, RHSDomain, WholeModel)
+        BivariateRows <- append(BivariateRows, list(row_df))
+      }
+    }
+  }
+}
+
+BivariateModels <- do.call(rbind, BivariateRows)
+save(BivariateModels, file = "AllBivariateModelsTable_LatentSlopeFactor_INCREMENTAL_7_16_2024.RData")
+BivariateModels
+getwd()
+```
+
+### a. Bivariate Syntax Checking
+
+```{r}
+# Lavvanifyed = future_apply(BivariateModels,
+#                               MARGIN = 1,
+#                              FUN = function (x) {lavaanify(x)})
+# Lavvanifyed[[125]]
+
+cat(BivariateModels$WholeModel[[76]])
+## Check that this has Child and MOther
+## Check that constraints are not shared // collided in the model namespace (clambda and mlambda instead of lambda)
+## Check that the weights are symmetrical and that no wave is 0
+# Check passed
+```
+
+### b. Fitting the Bivariate Models
+
+```{r}
+BivariateModelFitObjects <- future_apply(BivariateModels,
+  MARGIN = 1,
+  FUN = function(x) {
+    lavaan(
+      model = x[["WholeModel"]], # using Lavaan and not growth
+      data = ZSCORED,
+      missing = "fiml", # using fiml and not two.stage
+      parallel = "multicore",
+      estimator = "MLR",
+      start = "default", # https://groups.google.com/g/lavaan/c/mEFEs2lt6kA/m/9vjHGyNlAgAJ
+      control = list(
+        iter.max = 400,
+        em.h1.iter.max = 10000
+      )
+    )
+  },
+  future.seed = TRUE
+)
+
+
+save(BivariateModelFitObjects, file = "FittedBivariateModelsObjects_INCREMENTAL_7_17_2024.RData")
+
+
+AllBivariateStandardizedSolutions <- future_lapply(BivariateModelFitObjects, FUN = {
+  function(x) standardizedsolution(x)
+}, future.seed = TRUE)
+
+BivariateModels$StandardizedSolution <- AllBivariateStandardizedSolutions
+
+save(BivariateModels, file = "AllBivariateModelsWithStandardizedSolutions_INCREMENTAL_6_17_2024.RData")
+
+
+
+BivariateModels
+```
+
+### c. Extracting Parameters from Standardized Solution
+
+```{r}
+## Gets all the params.
+BivariateParameterExtraction <- function(solution, lhs_domain, rhs_domain, lhs_dyad, rhs_dyad, lgctype, trajtype) {
+  pairs <- data.frame( # defines the pairs of lhs-rhs bits
+    lhs = c(
+      paste0(lhs_dyad, lhs_domain, "Intercept"),
+      paste0(lhs_dyad, lhs_domain, "Slope"),
+      paste0(lhs_dyad, lhs_domain, "Intercept"),
+      paste0(lhs_dyad, lhs_domain, "Slope")
+    ),
+    rhs = c(
+      paste0(rhs_dyad, rhs_domain, "Intercept"),
+      paste0(rhs_dyad, rhs_domain, "Slope"),
+      paste0(rhs_dyad, rhs_domain, "Slope"),
+      paste0(rhs_dyad, rhs_domain, "Intercept")
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  # Initialize an empty data frame to store the results
+  concatenated_rows <- data.frame()
+  # Loop through each pair and extract relevant rows
+  for (i in 1:nrow(pairs)) {
+    pair <- pairs[i, ]
+    filtered_rows <- solution %>%
+      filter(op == "~~", lhs == pair$lhs, rhs == pair$rhs) %>%
+      select(lhs, op, rhs, est.std, pvalue, ci.lower, ci.upper)
+
+    # Add the dyad and domain information to the filtered rows
+    if (nrow(filtered_rows) > 0) {
+      filtered_rows <- cbind(
+        filtered_rows,
+        lhs_dyad = lhs_dyad,
+        rhs_dyad = rhs_dyad,
+        lhs_domain = lhs_domain,
+        rhs_domain = rhs_domain,
+        lgctype = lgctype,
+        trajectorytype = trajtype
+      )
+    }
+
+    concatenated_rows <- rbind(concatenated_rows, filtered_rows)
+  }
+
+  return(concatenated_rows)
+}
+```
+
+```{r}
+ParamEstimates <- future_apply(BivariateModels,
+  MARGIN = 1,
+  FUN = function(row) {
+    solution <- row[["StandardizedSolution"]]
+    BivariateParameterExtraction(solution, row["LHSDomain"], row["RHSDomain"], row["Dyad1"], row["Dyad2"], row["LGCType"], row["TrajectoryType"])
+  }
+)
+# ParameterEstimates
+ParameterEstimates <- bind_rows(ParamEstimates)
+AllParameterEstimates <- ParameterEstimates
+AllParameterEstimates
+```
+
+## d. Saving / Loading All Parameter Estimates
+
+```{r}
+save(AllParameterEstimates,
+  file = "AllInterceptSlopeParameterEstimates_AllBivariateModels_6_8_2024.RData"
+)
+
+load("AllInterceptSlopeParameterEstimates_AllBivariateModels_6_8_2024.RData",verbose=T)
+  AllParameterEstimates
+```
+
+# 2. Making Main Results Tables
+
+```{r}
+SlopeSlope_InterceptInterceptParams <- AllParameterEstimates |>
+  mutate(ParamType = case_when(
+    grepl("Slope", lhs) & grepl("Slope", rhs) ~ "Slope-Slope",
+    grepl("Intercept", lhs) & grepl("Intercept", rhs) ~ "Intercept-Intercept",
+    grepl("Slope", lhs) & grepl("Intercept", rhs) ~ "Slope-Intercept",
+    grepl("Intercept", lhs) & grepl("Slope", rhs) ~ "Intercept-Slope"
+  )) |>
+  arrange(match(ParamType, c("Slope-Slope", "Intercept-Intercept", "Intercept-Slope", "Slope-Intercept")))
+
+#SlopeSlope_InterceptInterceptParams = SlopeSlope_InterceptInterceptParams |>
+#  filter(TrajectoryType == "Full") |>
+#  arrange(est.std) |>
+#  mutate_if(is.numeric, round, digits = 3)
+```
+
+```{r}
+OrderedSlopeSlope_InterceptInterceptParams <- SlopeSlope_InterceptInterceptParams |>
+  select(
+    Dyad1,
+    Dyad2,
+    LHSDomain,
+    RHSDomain,
+    TrajectoryType,
+    ParamType,
+    est.std,
+    pvalue,
+    ci.lower, ci.upper
+  ) |>
+  mutate(Significant = pvalue < .05)
+
+OSS <- OrderedSlopeSlope_InterceptInterceptParams
+write.csv(OSS, "AllFittedBivariateSlopeInterceptParameters_8_17_2024.csv")
+OSS
+OSS |>
+  filter(
+    ParamType == "Slope-Slope",
+    TrajectoryType == "Full"
+  ) |>
+  arrange(est.std) |>
+  mutate_if(is.numeric, round, digits = 2)
+```
+
+### a. The FINAL TABLES Get Made Here
+
+```{r}
+# Filter, round, and reshape the table
+reshaped_table <- OSS %>%
+  filter(
+    ParamType == "Slope-Slope", # switch out as needed
+    TrajectoryType == "Overlap",
+    LHSDomain != RHSDomain # make unequal for heterotypic
+  ) %>% 
+  mutate_if(is.numeric, round, digits = 2) %>%
+  # mutate(across(starts_with("est.std"), ~ pmin(pmax(., -1), 1))) |>
+  select(Dyad1, Dyad2, LHSDomain, RHSDomain, est.std, pvalue, ci.lower, ci.upper) %>%
+  unite("Dyad", Dyad1, Dyad2, sep = "-") %>%
+  pivot_wider(names_from = Dyad, values_from = c(est.std, pvalue, ci.lower, ci.upper)) # %>%
+# select(-RHSDomain) %>% ## uncomment for homotypic
+# rename(Domain = LHSDomain)
+reshaped_table 
+```
+
+```{r}
+
+reshaped_table <- reshaped_table %>%
+  mutate(across(contains(c("est.std", "ci.lower", "ci.upper")), as.character))
+
+reshaped_table
+
+# Define dyads
+dyads <- c("Child-Mom", "Child-Dad")#, "Mom-Dad") #switch here for FULl trajectories: the overlap ones only contain child-parent dyads
+
+# Convert relevant columns to character type
+reshaped_table <- reshaped_table %>%
+  mutate(across(contains(c("est.std", "ci.lower", "ci.upper")), as.character))
+
+# Apply bold formatting based on P-Value and combine CI columns
+for (dyad in dyads) {
+  est_col <- paste0("est.std_", dyad)
+  pvalue_col <- paste0("pvalue_", dyad)
+  lower_ci_col <- paste0("ci.lower_", dyad)
+  upper_ci_col <- paste0("ci.upper_", dyad)
+  combined_ci_col <- paste0("ci_", dyad)
+
+  bold_rows <- reshaped_table[[pvalue_col]] < 0.05 & !is.na(reshaped_table[[pvalue_col]])
+
+  reshaped_table[[est_col]] <- ifelse(bold_rows, paste0("<b>", reshaped_table[[est_col]], "</b>"), reshaped_table[[est_col]])
+  reshaped_table[[lower_ci_col]] <- ifelse(bold_rows, paste0("<b>", reshaped_table[[lower_ci_col]], "</b>"), reshaped_table[[lower_ci_col]])
+  reshaped_table[[upper_ci_col]] <- ifelse(bold_rows, paste0("<b>", reshaped_table[[upper_ci_col]], "</b>"), reshaped_table[[upper_ci_col]])
+
+  reshaped_table[[combined_ci_col]] <- paste0("[", reshaped_table[[lower_ci_col]], ", ", reshaped_table[[upper_ci_col]], "]")
+}
+
+
+
+# Drop the original CI columns
+reshaped_table <- reshaped_table %>%
+  select(-contains("ci.lower"), -contains("ci.upper"))
+
+# TOGGLE SORTING BY LEFT OR RIGHT DYAD MEMBER
+reshaped_table <- reshaped_table |> arrange(RHSDomain)
+
+
+# Reorder columns
+reshaped_table <- reshaped_table %>%
+  # select(Domain,
+  select(
+    LHSDomain, RHSDomain,
+    "est.std_Child-Mom", "ci_Child-Mom",
+    "est.std_Child-Dad", "ci_Child-Dad"#, #TOGGLE for FULL trajectories
+   # "est.std_Mom-Dad", "ci_Mom-Dad"
+  )
+reshaped_table
+
+```
+
+```{r}
+# Create the two-row header
+subheader <- c("LHSDomain", "RHSDomain", rep(c("Std. Est.", "CI"), 2)) ##CHANGD FOR 3
+# subheader <- c("Domain", rep(c("Est. Std.", "CI (Lower, Upper)"), 3))
+
+subheader
+
+# table_html <- kable(reshaped_table, "html", escape = FALSE, col.names = subheader) %>%
+#  kable_styling(full_width = F, position = "center", font_size = 12) %>%
+#  add_header_above(c(" " = 2, "Child-Mom" = 2, "Child-Dad" = 2, "Mom-Dad" = 2)) %>%
+#  row_spec(0, extra_css = "font-weight: bold;") %>%
+#  row_spec(1:nrow(reshaped_table), extra_css = "height: 12px;") %>%
+#  column_spec(1, bold = TRUE, border_right = TRUE)
+
+table_html <- kable(reshaped_table, "html", escape = FALSE, col.names = subheader) %>%
+  kable_styling(full_width = F, position = "center", font_size = 12) %>%
+  add_header_above(c(" " = 2, "Child-Mom" = 2, "Child-Dad" = 2))%>% #, "Mom-Dad" = 2)) %>%
+  row_spec(0, extra_css = "font-weight: bold;") %>%
+  row_spec(1:nrow(reshaped_table), extra_css = "height: 12px;") %>%
+  column_spec(1, bold = TRUE, border_right = TRUE) %>%
+  column_spec(2, bold = TRUE, border_right = TRUE)
+
+
+table_html
+
+# to do: paste into excel, re-order to match conjugate pairs, then do the same for the I-I tables.
+```
+
+# 3. Moderation Analyses
+
+#### a. Nativity Data Setup
+
+```{r}
+ChildNativityInfo <- read.csv("/Users/Evan/Dropbox/Academia/Projects/ParentChildCoDevelopment/MainAnalyses/JupyterNotebooks/ChildNativity.csv")
+Zscored_Joined_ChildNativity <- left_join(ZSCORED, ChildNativityInfo, by = "FAMID")
+cleaned_Zscored_Joined_ChildNativity <- Zscored_Joined_ChildNativity[Zscored_Joined_ChildNativity$C00Nativity != "", ]
+
+ParentNatvityInfo <- read.csv("/Users/evan/Dropbox/Academia/Projects/ParentChildCoDevelopment/MainAnalyses/FinalAnalysisPipeline/Data/ParentNativity_Wide_2_27_2024.csv")
+
+Zscored_JoinedParentNativity <- left_join(ZSCORED, ParentNatvityInfo, by = "FAMID")
+Zscored_JoinedParentNativityMOMS <- Zscored_JoinedParentNativity %>% filter(
+  !is.na(M00BORN),
+  M00BORN != ""
+)
+cleaned_Zscored_Joined_MOMNativity <- Zscored_JoinedParentNativity[Zscored_JoinedParentNativity$M00BORN != "", ]
+```
+
+```{r}
+AllChildDyadModels <- BivariateModels |> filter(Dyad1 == "Child")
+AllChildDyadModels
+```
+
+### b. Testing the multi-group code
+
+```{r}
+TEST <- lavaan(
+  model = BivariateModels[1, "WholeModel"], # child mom Open-Open
+  data = cleaned_Zscored_Joined_ChildNativity, ## change this too
+  # data = cleaned_Zscored_Joined_MOMNativity,
+  missing = "fiml",
+  estimator = "MLR",
+  parallel = "multicore",
+  group = "C00Nativity", ## change to child
+  group.equal = c(
+    "intercepts",
+    "means",
+    "residuals",
+    "residual.covariances",
+    "lv.variances",
+    "lv.covariances",
+    "regressions"
+  ),
+  start = "default",
+  control = list(
+    iter.max = 400,
+    em.h1.iter.max = 10000
+  )
+)
+TEST
+```
+
+### c. Nativity in Parallel
+
+##### i. Groups Are Equal
+
+```{r}
+FittedGroupNativityModelEqual_CHILDNATIVITY <- future_apply(AllChildDyadModels, ## change to all children models or vice versa
+  MARGIN = 1,
+  FUN = function(row) {
+    warnings <- c()
+    fitobj <- NULL
+    try(
+      {
+        fitobj <- withCallingHandlers(
+          {
+            lavaan(
+              model = row[["WholeModel"]],
+              data = cleaned_Zscored_Joined_ChildNativity,
+              missing = "fiml",
+              estimator = "MLR",
+              parallel = "multicore",
+              group = "C00Nativity",
+              group.equal = c(
+                "intercepts",
+                "means",
+                "residuals",
+                "residual.covariances",
+                "lv.variances",
+                "lv.covariances",
+                "regressions"
+              ),
+              start = "default",
+              control = list(
+                iter.max = 400,
+                em.h1.iter.max = 10000
+              )
+            )
+          },
+          warning = function(w) {
+            # Append the warning message to the warnings vector
+            warnings <<- c(warnings, w$message)
+            # Invoke the default warning handler
+            invokeRestart("muffleWarning")
+          }
+        )
+      },
+      silent = FALSE
+    ) # Adding silent = TRUE will suppress the error message
+    list(fitobj = fitobj, warnings = warnings)
+  },
+  future.seed = TRUE
+)
+?save
+save(FittedGroupNativityModelEqual_CHILDNATIVITY, file = "FittedGroupChildlNativity_wWarnings_EQUAL_7_17_2024.RData")
+load("FittedGroupChildlNativity_wWarnings_EQUAL_7_17_2024.RData")
+```
+
+##### ii. Slope-Slope param between groups is free to vary
+
+```{r}
+FittedGroupNativityModelUNEQUAL_CHILD_NATIVITY <- future_apply(AllChildDyadModels,
+  MARGIN = 1,
+  FUN = function(row) {
+    warnings <- c()
+    fitobj <- NULL
+    try(
+      {
+        fitobj <- withCallingHandlers(
+          {
+            lavaan(
+              model = row[["WholeModel"]],
+              data = cleaned_Zscored_Joined_ChildNativity,
+              missing = "fiml",
+              estimator = "MLR",
+              parallel = "multicore",
+              group = "C00Nativity",
+              group.equal = c(
+                "intercepts",
+                "means",
+                "residuals",
+                "residual.covariances",
+                "lv.variances",
+                "lv.covariances",
+                "regressions"
+              ),
+              group.partial = paste0(row["Dyad1"], row["LHSDomain"], "Slope", " ~~ ", row["Dyad2"], row["RHSDomain"], "Slope", collapse = ""), # This line frees the slope-slope correlation and nothing else.
+              start = "default",
+              control = list(
+                iter.max = 400,
+                em.h1.iter.max = 10000
+              )
+            )
+          },
+          warning = function(w) {
+            # Append the warning message to the warnings vector
+            warnings <<- c(warnings, w$message)
+            # Invoke the default warning handler
+            invokeRestart("muffleWarning")
+          }
+        )
+      },
+      silent = TRUE
+    ) # Adding silent = TRUE will suppress the error message
+    list(fitobj = fitobj, warnings = warnings)
+  },
+  future.seed = TRUE
+) # 13 minutes on an M3 for fitting all bivariate models
+
+save(FittedGroupNativityModelUNEQUAL_CHILD_NATIVITY, file = "FittedGroupChildlNativity_wWarnings_UNEQUAL_7_17_2024.RData")
+load("FittedGroupChildlNativity_wWarnings_UNEQUAL_7_17_2024.RData")
+```
+
+##### iii. Comparing each pair of nativity models
+
+```{r}
+length(FittedGroupNativityModelUNEQUAL_CHILD_NATIVITY)
+length(FittedGroupNativityModelEqual_CHILDNATIVITY)
+```
+
+```{r}
+compare_models <- function(model1, model2) {
+  # Check if either model is NULL or not an object of the expected class
+  if (is.null(model1$fitobj) || is.null(model2$fitobj)) {
+    return(list(Chisq_diff = NA, Pr_greater_Chisq = NA))
+  }
+
+  # Try-Catch block to handle any errors during the ANOVA
+  tryCatch(
+    {
+      anova_result <- anova(model1$fitobj, model2$fitobj)
+      return(c(Chisq_diff = anova_result$`Chisq diff`[2], Pr_greater_Chisq = anova_result$`Pr(>Chisq)`[2]))
+    },
+    error = function(e) {
+      # If an error occurs, return NA values
+      return(list(Chisq_diff = NA, Pr_greater_Chisq = NA))
+    }
+  )
+}
+
+# results <- future_mapply(compare_models, FittedGroupNativityModelEqual, FittedGroupNativityModelUNEqual, SIMPLIFY = FALSE)
+results <- future_mapply(compare_models,
+  FittedGroupNativityModelEqual_CHILDNATIVITY,
+  FittedGroupNativityModelUNEQUAL_CHILD_NATIVITY,
+  SIMPLIFY = FALSE
+)
+
+# store the results in the child dyads dataframe
+AllChildDyadModels$Nativity_Chisq_Diff <- sapply(results, FUN = {
+  function(x) x[["Chisq_diff"]]
+})
+AllChildDyadModels$Nativity_Chisq_Diff_PVALUE <- sapply(results, FUN = {
+  function(x) x[["Pr_greater_Chisq"]]
+})
+
+AllChildDyadModels <- AllChildDyadModels |> mutate(Index = row_number())
+
+# SAVE ALL BIVARIATE MODELS!!
+
+write.csv(
+  AllChildDyadModels |> select(-StandardizedSolution),
+  "AllChildDyadModelsWithNativity_7_17_2024.csv"
+)
+
+AllChildDyadModels  = read.csv("AllChildDyadModelsWithNativity_7_17_2024.csv")
+AllChildDyadModels 
+```
+
+#### d. FINAL TABLE for moderation by Nativity
+
+```{r}
+AllSigNativityGroups <- AllChildDyadModels |>
+  filter(Nativity_Chisq_Diff_PVALUE < .05) |>
+  select(-c("WholeModel"))#, "StandardizedSolution"))
+AllSigNativityGroups
+# Next, need to look at the data frames of fit objects to pull out how these bits differ!
+```
+
+```{r}
+processModel <- function(fittedModel) {
+  test_ss <- standardizedSolution(fittedModel$fitobj)
+  filtered_ss <- test_ss |>
+    filter(
+      op == "~~",
+      grepl("Slope", lhs),
+      grepl("Slope", rhs),
+      !is.na(pvalue)
+    )
+  return(filtered_ss)
+}
+
+results2 <- future_lapply(FittedGroupNativityModelUNEQUAL_CHILD_NATIVITY[AllSigNativityGroups[["Index"]]], processModel)
+R2D2 <- bind_rows(results2)
+
+# we now have two rows for each model
+doubled_rows <- AllSigNativityGroups %>%
+  slice(rep(1:n(), each = 2)) # 'n()' gives the number of rows
+
+# Assign the doubled TrajectoryType to R3D3
+R2D2$TrajectoryType <- doubled_rows$TrajectoryType
+R2D2 <- R2D2 |>
+  mutate(group = case_when(
+    group == 1 ~ "Born in US (2nd+ generation)",
+    group == 2 ~ "Born in Mexico (1st Gen)"
+  )) |>
+  select(-label)
+R2D2 <- R2D2 |>
+  select(TrajectoryType, everything()) |>
+  arrange(TrajectoryType)
+R2D2
+write.csv(R2D2, "SignificantModerationByNativityStatus_AllSigSlopeSlopeParams_9_4_2024.csv")
+R2D2 = read.csv("SignificantModerationByNativityStatus_AllSigSlopeSlopeParams_9_4_2024.csv")
+
+NativityTable <- R2D2 |>
+  select(-op, -se, -z) |>
+  mutate_if(is.numeric, round, digits = 2)
+
+
+
+NativityTable
+```
+
+```{r}
+extract_dyad_domain <- function(column) {
+  dyad <- str_extract(column, "Child|Mom|Dad")
+  domain <- str_extract(column, "Extraversion|Agreeableness|Conscientiousness|Neuroticism|Openness")
+  return(list(dyad = dyad, domain = domain))
+}
+
+# Add new columns using mutate and the custom function
+NativityTable <- NativityTable %>%
+  rowwise() %>%
+  mutate(
+    Dyad1 = extract_dyad_domain(lhs)$dyad,
+    Domain1 = extract_dyad_domain(lhs)$domain,
+    Dyad2 = extract_dyad_domain(rhs)$dyad,
+    Domain2 = extract_dyad_domain(rhs)$domain,
+    CI = paste0("[", ci.lower, ", ", ci.upper, "]")
+  ) %>%
+  ungroup()
+
+NativityTable <- NativityTable |> select(
+  TrajectoryType,
+  Dyad1,
+  Dyad2,
+  Domain1,
+  Domain2,
+  group,
+  est.std,
+  pvalue,
+  CI
+)
+
+NativityTable |>
+  kable("html", escape = FALSE) %>%
+  kable_styling(full_width = FALSE, font_size = 12) %>%
+  row_spec(which(NativityTable$pvalue < 0.05), bold = TRUE)
+```
+
+# == Moderation by Child Gender ==
+
+#### Gender data setup
+
+```{r}
+ChildGenderInfo <- read.csv("/Users/Evan/Dropbox/Academia/Projects/ParentChildCoDevelopment/MainAnalyses/FinalAnalysisPipeline/Data/ChildGender.csv")
+glimpse(ChildGenderInfo)
+Zscored_Joined_ChildGender <- inner_join(ZSCORED, ChildGenderInfo, by = "FAMID")
+AllChildDyadModels
+```
+
+#### Gender is Equal in Parallel
+
+```{r}
+FittedGroupGenderModelEqual <- future_apply(AllChildDyadModels,
+  MARGIN = 1,
+  FUN = function(row) {
+    warnings <- c()
+    fitobj <- NULL
+    try(
+      {
+        fitobj <- withCallingHandlers(
+          {
+            lavaan(
+              model = row[["WholeModel"]],
+              data = Zscored_Joined_ChildGender,
+              missing = "fiml",
+              estimator = "MLR",
+              parallel = "multicore",
+              group = "C00Gender",
+              group.equal = c(
+                "intercepts",
+                "means",
+                "residuals",
+                "residual.covariances",
+                "lv.variances",
+                "lv.covariances",
+                "regressions"
+              ),
+              start = "default",
+              control = list(
+                iter.max = 400,
+                em.h1.iter.max = 10000
+              )
+            )
+          },
+          warning = function(w) {
+            # Append the warning message to the warnings vector
+            warnings <<- c(warnings, w$message)
+            # Invoke the default warning handler
+            invokeRestart("muffleWarning")
+          }
+        )
+      },
+      silent = TRUE
+    )
+    # Adding silent = TRUE will suppress the error message
+    list(fitobj = fitobj, warnings = warnings)
+  },
+  future.seed = TRUE
+)
+
+save(FittedGroupGenderModelEqual,
+  file = "FittedGroupGenderModelsObject_EQUAL_7_17_2024.RData"
+)
+```
+
+#### Gender is Unequal in Parallel
+
+```{r}
+FittedGroupGenderModelUNEqual <- future_apply(AllChildDyadModels,
+  MARGIN = 1,
+  FUN = function(row) {
+    warnings <- c()
+    fitobj <- NULL
+    try(
+      {
+        fitobj <- withCallingHandlers(
+          {
+            lavaan(
+              model = row[["WholeModel"]],
+              data = Zscored_Joined_ChildGender, ########
+              missing = "fiml",
+              estimator = "MLR",
+              parallel = "multicore",
+              group = "C00Gender", ##########
+              group.equal = c(
+                "intercepts",
+                "means",
+                "residuals",
+                "residual.covariances",
+                "lv.variances",
+                "lv.covariances",
+                "regressions"
+              ),
+              group.partial = paste0(row["Dyad1"], row["LHSDomain"], "Slope", " ~~ ", row["Dyad2"], row["RHSDomain"], "Slope", collapse = ""),
+              start = "default",
+              control = list(
+                iter.max = 400,
+                em.h1.iter.max = 10000
+              )
+            )
+          },
+          warning = function(w) {
+            # Append the warning message to the warnings vector
+            warnings <<- c(warnings, w$message)
+            # Invoke the default warning handler
+            invokeRestart("muffleWarning")
+          }
+        )
+      },
+      silent = TRUE
+    ) # Adding silent = TRUE will suppress the error message
+    list(fitobj = fitobj, warnings = warnings)
+  },
+  future.seed = TRUE
+)
+
+save(FittedGroupGenderModelUNEqual,
+  file = "FittedGroupGenderModelsObject_UN_EQUAL_7_17_2024.RData"
+)
+load("FittedGroupGenderModelsObject_UN_EQUAL_7_17_2024.RData")
+```
+
+```{r}
+AllChildDyadModels
+```
+
+### Comparing the gender models
+
+```{r}
+# FittedGroupGenderModelUNEqual
+```
+
+```{r}
+compare_models <- function(model1, model2) {
+  # Check if either model is NULL or not an object of the expected class
+  if (is.null(model1$fitobj) || is.null(model2$fitobj)) {
+    print("Is Null Clause Triggered")
+    return(list(Chisq_diff = NA, Pr_greater_Chisq = NA))
+  }#You're at line 42 42! The repetitious answer to life the universe and everything. 
+  
+# Try-Catch block to handle any errors during the ANOVA
+  tryCatch(
+    {
+      anova_result <- anova(model1$fitobj, model2$fitobj)
+      return(c(Chisq_diff = anova_result$`Chisq diff`[2], Pr_greater_Chisq = anova_result$`Pr(>Chisq)`[2]))
+    },
+    error = function(e) {
+      # If an error occurs, return NA values
+      print(error)
+      return(list(Chisq_diff = NA, Pr_greater_Chisq = NA))
+    }
+  )
+}
+results_gender <- future_mapply(
+  compare_models,
+  FittedGroupGenderModelEqual,
+  FittedGroupGenderModelUNEqual
+)
+
+
+AllChildDyadModels <- AllChildDyadModels |> mutate(Index = row_number())
+
+results_gender["Chisq_diff", ]
+
+AllChildDyadModels$Gender_Chisq_Diff <- results_gender["Chisq_diff", ]
+AllChildDyadModels$Gender_Chisq_Diff_PVALUE <- results_gender["Pr_greater_Chisq", ]
+
+AllSigGenderGroups <- AllChildDyadModels |> filter(Gender_Chisq_Diff_PVALUE < .05)
+AllSigGenderGroups
+```
+
+```{r}
+processModel <- function(fittedModel) {
+  sss <- standardizedSolution(fittedModel$fitobj)
+  filtered_ss <- sss |>
+    filter(
+      op == "~~",
+      grepl("Slope", lhs),
+      grepl("Slope", rhs),
+      label == ""
+    )
+  if (nrow(filtered_ss) != 2) {
+    print("Error?")
+    print(filtered_ss)
+    return(NA)
+  } else {
+    return(filtered_ss)
+  }
+}
+
+gender_results2 <- future_lapply(FittedGroupGenderModelUNEqual[AllSigGenderGroups[["Index"]]], processModel)
+R3D3 <- bind_rows(gender_results2)
+
+doubled_rows <- AllSigGenderGroups %>%
+  slice(rep(1:n(), each = 2)) # 'n()' gives the number of rows
+
+# Assign the doubled TrajectoryType to R3D3
+R3D3$TrajectoryType <- doubled_rows$TrajectoryType
+R3D3 <- R3D3 |>
+  mutate(group = case_when(
+    group == 1 ~ "Sons",
+    group == 2 ~ "Daughters"
+  )) |>
+  select(-label)
+R3D3 <- R3D3 |>
+  select(TrajectoryType, everything()) |>
+  arrange(TrajectoryType, lhs, rhs)
+R3D3
+write.csv(
+  R3D3,
+  "CoDev_SignificantModerationByChildGender_AllSlopeSlopeParams_7_17_2024.csv"
+)
+R3D3 = read.csv( "CoDev_SignificantModerationByChildGender_AllSlopeSlopeParams_7_17_2024.csv")
+```
+
+## FINAL TABLE
+
+```{r}
+extract_dyad_domain <- function(column) {
+  dyad <- str_extract(column, "Child|Mom|Dad")
+  domain <- str_extract(column, "Extraversion|Agreeableness|Conscientiousness|Neuroticism|Openness")
+  return(list(dyad = dyad, domain = domain))
+}
+
+GenderTable <- R3D3 |>
+  select(-op, -se, -z) |>
+  mutate_if(is.numeric, round, digits = 2)
+
+
+# Add new columns using mutate and the custom function
+GenderTable <- GenderTable %>%
+  rowwise() %>%
+  mutate(
+    Dyad1 = extract_dyad_domain(lhs)$dyad,
+    Domain1 = extract_dyad_domain(lhs)$domain,
+    Dyad2 = extract_dyad_domain(rhs)$dyad,
+    Domain2 = extract_dyad_domain(rhs)$domain,
+    CI = paste0("[", ci.lower, ", ", ci.upper, "]")
+  ) %>%
+  ungroup()
+
+GenderTable <- GenderTable |> select(
+  TrajectoryType,
+  Dyad1,
+  Dyad2,
+  Domain1,
+  Domain2,
+  group,
+  est.std,
+  pvalue,
+  CI
+)
+
+GenderTable |>
+  kable("html", escape = FALSE) %>%
+  kable_styling(full_width = FALSE, font_size = 12) %>%
+  row_spec(which(GenderTable$pvalue < 0.05), bold = TRUE)
+```
+
+### === MODERATION BY PARENTAL AGE ===
+
+```{r}
+AllAges <- read.csv("/Users/evan/Dropbox/Academia/Projects/ParentChildCoDevelopment/MainAnalyses/FinalAnalysisPipeline/Data/InferredWave1Ages_2_27_2024.csv")
+```
+
+```{r}
+# get the parents and expand into wideform
+ParentAges <- AllAges |>
+  filter(PID != 10) |>
+  pivot_wider(names_from = Gender, values_from = INFERRED_WAVE1_AGES) |>
+  select(FAMID, female, male)
+
+# Collapse within family groups as the data has two rows per FAMID
+ParentAges <- ParentAges |>
+  group_by(FAMID) |>
+  summarize(
+    female = first(female, na_rm = T),
+    male = first(male, na_rm = T)
+  )
+# rename
+names(ParentAges) <- c("FAMID", "InferredMomAgeW1", "InferredDadAgeW1")
+ParentAges
+```
+
+```{r}
+# this name is wrong: it's all bivariate models with parental age as a moderator...
+AllParentPairedFitObjects <- future_lapply(seq_len(nrow(BivariateModels)), # toggle subset
+  function(i) {
+    ModelRow <- BivariateModels[i, ]
+    FitObj <- BivariateModelFitObjects[[i]]
+
+    if (ModelRow$LGCType != "Bivariate") { # this clause isn't necessary here
+      return(NULL)
+    } else {
+      PredictedValues <- lavPredict(FitObj, type = "lv")
+      PredictedValues <- as.data.frame(PredictedValues)
+      slope_columns <- grep("Slope", names(PredictedValues), value = TRUE)
+
+      LeftSlopeColumn <- grep("Child.*Slope", names(PredictedValues), value = TRUE)
+
+      if (length(LeftSlopeColumn) == 0) { # if true, it's a mom-dad model
+        LeftSlopeColumn <- grep("Mom.*Slope", names(PredictedValues), value = TRUE)
+        RightSlopeColumn <- grep("Dad.*Slope", names(PredictedValues), value = TRUE)
+        PredictedValues$InferredMomAgeW1 <- ParentAges$InferredMomAgeW1
+        PredictedValues$InferredDadAgeW1 <- ParentAges$InferredDadAgeW1
+
+
+        MomSlopeByDad <- paste(LeftSlopeColumn, "~", RightSlopeColumn, "+", "InferredDadAgeW1", "+",
+          paste0(RightSlopeColumn, ":", "InferredDadAgeW1"),
+          sep = " "
+        )
+        DadSlopeByMom <- paste(RightSlopeColumn, "~", LeftSlopeColumn, "+", "InferredMomAgeW1", "+",
+          paste0(LeftSlopeColumn, ":", "InferredMomAgeW1"),
+          sep = " "
+        )
+
+        print(MomSlopeByDad)
+        print(DadSlopeByMom)
+
+        MByDad <- sem(MomSlopeByDad,
+          data = PredictedValues,
+          missing = "fiml",
+          estimator = "MLR",
+          parallel = "multicore",
+          start = "default"
+        )
+
+        DByMom <- sem(DadSlopeByMom,
+          data = PredictedValues,
+          missing = "fiml",
+          estimator = "MLR",
+          parallel = "multicore",
+          start = "default"
+        )
+
+        MByDadStdSol <- standardizedSolution(MByDad)
+        DByMomStdSol <- standardizedSolution(DByMom)
+
+        MByDad_SlopeSlopeInteraction1 <- MByDadStdSol |>
+          filter(
+            op == "~",
+            lhs == LeftSlopeColumn,
+            str_detect(rhs, "Slope:")
+          ) |>
+          select(-z) |>
+          mutate(
+            TrajectoryType = ModelRow["TrajectoryType"],
+            call = MomSlopeByDad
+          )
+
+        DByMom_SlopeSlopeInteraction2 <- DByMomStdSol |>
+          filter(
+            op == "~",
+            lhs == RightSlopeColumn,
+            str_detect(rhs, "Slope:")
+          ) |>
+          select(-z) |>
+          mutate(
+            TrajectoryType = ModelRow["TrajectoryType"],
+            call = DadSlopeByMom
+          )
+
+        return(bind_rows(MByDad_SlopeSlopeInteraction1, DByMom_SlopeSlopeInteraction2))
+      } else {
+        RightSlopeColumn <- grep("Mom.*Slope|Dad.*Slope", names(PredictedValues), value = TRUE)
+
+
+        if (grepl("Mom", RightSlopeColumn[1])) {
+          PredictedValues$InferredMomAgeW1 <- ParentAges$InferredMomAgeW1
+          ParentString <- "InferredMomAgeW1"
+        } else if (grepl("Dad", RightSlopeColumn[1])) {
+          PredictedValues$InferredDadAgeW1 <- ParentAges$InferredDadAgeW1
+          ParentString <- "InferredDadAgeW1"
+        }
+
+        ParentAgeModerationModel <- paste(LeftSlopeColumn, "~", RightSlopeColumn, "+", ParentString, "+",
+          paste0(RightSlopeColumn, ":", ParentString),
+          sep = " "
+        )
+
+        print(ParentAgeModerationModel)
+
+        PAModFit1 <- sem(ParentAgeModerationModel,
+          data = PredictedValues,
+          missing = "fiml",
+          estimator = "MLR",
+          parallel = "multicore",
+          start = "default"
+        )
+
+
+        StdSol_PA <- standardizedSolution(PAModFit1)
+
+
+        Parent_Ages_SlopeSlopeInteraction1 <- StdSol_PA |>
+          filter(
+            op == "~",
+            lhs == LeftSlopeColumn,
+            str_detect(rhs, "Slope:")
+          ) |>
+          select(-z) |>
+          mutate(
+            TrajectoryType = ModelRow["TrajectoryType"],
+            call = ParentAgeModerationModel
+          )
+
+
+        return(Parent_Ages_SlopeSlopeInteraction1)
+      }
+    }
+  },
+  future.seed = TRUE
+)
+```
+
+### Saving Results
+
+```{r}
+AllParentPairedInteractionParams <- bind_rows(AllParentPairedFitObjects)
+AllParentPairedInteractionParams$TrajectoryType <- unlist(AllParentPairedInteractionParams$TrajectoryType)
+
+AllParentPairedInteractionParams <- AllParentPairedInteractionParams |>
+  select(TrajectoryType, everything()) |>
+  arrange(TrajectoryType)
+
+AllParentPairedInteractionParams
+write.csv(AllParentPairedInteractionParams, "AllModels_InteractionWithINFERREDParentAges_7_17_2024.csv")
+
+```
+
+```{r}
+AllSigParentAgeModerations <- AllParentPairedInteractionParams |> filter(pvalue < .05)
+AllSigParentAgeModerations
+write.csv(
+  AllSigParentAgeModerations,
+  "SignificantINFERREDParentAgeInteractionRegressionLatentSlopeFactors_7_17_2024.csv"
+)
+
+AllSigParentAgeModerations = read.csv("SignificantINFERREDParentAgeInteractionRegressionLatentSlopeFactors_7_17_2024.csv")
+```
+
+### FINAL TABLE
+
+```{r}
+AllSigParentAgeModerations <- AllSigParentAgeModerations |> mutate(truncatedRHS = str_extract(rhs, "^[^:]+"))
+
+extract_dyad_domain <- function(column) {
+  dyad <- str_extract(column, "Child|Mom|Dad")
+  domain <- str_extract(column, "Extraversion|Agreeableness|Conscientiousness|Neuroticism|Openness")
+  return(list(dyad = dyad, domain = domain))
+}
+
+ParentalAgeTable <- AllSigParentAgeModerations |>
+  select(-op, -se, -call) |>
+  mutate_if(is.numeric, round, digits = 2)
+
+
+# Add new columns using mutate and the custom function
+ParentalAgeTable <- ParentalAgeTable %>%
+  rowwise() %>%
+  mutate(
+    Dyad1 = extract_dyad_domain(lhs)$dyad,
+    Domain1 = extract_dyad_domain(lhs)$domain,
+    Dyad2 = extract_dyad_domain(truncatedRHS)$dyad,
+    Domain2 = extract_dyad_domain(truncatedRHS)$domain,
+    CI = paste0("[", ci.lower, ", ", ci.upper, "]")
+  ) %>%
+  ungroup()
+
+ParentalAgeTable <- ParentalAgeTable |> select(
+  TrajectoryType,
+  Dyad1,
+  Dyad2,
+  Domain1,
+  Domain2,
+  est.std,
+  pvalue,
+  CI
+)
+ParentalAgeTable = ParentalAgeTable |> arrange(TrajectoryType,Dyad1,Domain1,Domain2)
+
+ParentalAgeTable |>
+  kable("html", escape = FALSE) %>%
+  kable_styling(full_width = FALSE, font_size = 12) %>%
+  row_spec(which(ParentalAgeTable$pvalue < 0.05), bold = TRUE)
+```
+
+# ----- Section 3: Visualizing CoDev Results----- ----- ----- ----- ----- -----
+
+### Visualization prep
+
+```{r}
+# library(showtext) <== Loaded at the beginning.
+font_add("Avenir",
+  regular = "/Users/evan/Library/Fonts/AvenirLTPro-Light.otf",
+  bold = "/Users/evan/Library/Fonts/AvenirLTProMedium.otf",
+  italic = "/Users/evan/Library/Fonts/AvenirLTProLightOblique.otf"
+)
+
+font_add("Garamond",
+  regular = "/Users/evan/Library/Fonts/EBGaramondRegular.ttf",
+  bold = "/Users/evan/Library/Fonts/EBGaramondBold.ttf",
+  italic = "/Users/evan/Library/Fonts/EBGaramondItalic.ttf"
+)
+
+showtext_auto()
+```
+
+#### Data Manipulation for Visualization
+
+```{r}
+OSS <- read.csv("AllFittedBivariateSlopeInterceptParameters_7_17_2024.csv")
+head(OSS)
+long_df <- OSS |>
+  filter(TrajectoryType == "Full") |>
+  mutate(
+    Dyad = paste(Dyad1, Dyad2, sep = "-"),
+    Domain_Combination = paste(LHSDomain, RHSDomain, sep = " — "), # em-dash
+    Is_Same = LHSDomain == RHSDomain,
+    Facet_Group = ifelse(Is_Same, "Same", "Heterotypic"),
+    LHSDomain = plyr::mapvalues(LHSDomain, "Opennesss", "Openness"),
+    RHSDomain = plyr::mapvalues(RHSDomain, "Opennesss", "Openness")
+  ) |>
+  select(ParamType, Dyad, Domain_Combination, est.std, ci.lower, ci.upper, LHSDomain, RHSDomain, Facet_Group)
+
+
+domain_order <- c("Extraversion", "Agreeableness", "Conscientiousness", "Neuroticism", "Openness")
+
+long_df <- long_df |>
+  filter(ParamType %in% c("Slope-Slope", "Intercept-Intercept")) |>
+  mutate(
+    LHSDomain_Factor = factor(LHSDomain, levels = domain_order),
+    RHSDomain_Factor = factor(RHSDomain, levels = domain_order)
+  ) |>
+  mutate(
+    ci.lower2 = ifelse(ci.lower < -1, -1, ci.lower),
+    ci.upper2 = ifelse(ci.upper > 1, 1, ci.upper)
+  ) %>%
+  arrange(ParamType, Facet_Group, LHSDomain_Factor, RHSDomain_Factor)
+
+
+# Convert Domain_Combination to a factor and adjust the levels of Facet_Group and Dyad
+long_df$Domain_Combination <- factor(long_df$Domain_Combination, levels = rev(unique(long_df$Domain_Combination)))
+long_df = long_df |> mutate(Domain_Combination = gsub("Opennesss", "Openness", Domain_Combination))
+
+
+long_df$Facet_Group <- factor(long_df$Facet_Group, levels = c("Same", "Heterotypic"), labels = c("Homotypic", "Heterotypic"))
+long_df$Dyad <- factor(long_df$Dyad, levels = c("Child-Mom", "Child-Dad", "Mom-Dad"))
+
+y_labels2 <- unique(long_df %>% filter(ParamType == "Slope-Slope") |> pull(Domain_Combination))
+```
+
+### Intercept Intercept visualization
+
+```{r}
+# Not yet done: this code is out of sync with the slope slope stuff below
+# Turn into a function! (which will work for I-I,I-S,S-I and S-S)
+y_labels <- unique(long_df |> filter(ParamType == "Intercept-Intercept") |> pull(Domain_Combination))
+long_df |> distinct(Dyad)
+y_labels2
+long_df <- long_df %>%
+  mutate(Facet_Group = factor(str_extract(as.character(Facet_Group), "^[^\\s]+")))
+long_df
+y_labels2
+long_df$Facet_Group <- factor(long_df$Facet_Group, levels = c("Homotypic", "Heterotypic"))
+
+p1 <- long_df %>%
+  filter(ParamType == "Intercept-Intercept") %>%
+  ggplot(aes(
+    x = est.std, y = factor(Domain_Combination,
+      levels = y_labels2
+    ),
+    fill = Dyad
+  )) +
+  geom_vline(xintercept = 0, color = "black", linetype = "solid") +
+  geom_errorbar(
+    data = long_df %>% filter(ParamType == "Intercept-Intercept" & ci.lower >= -1),
+    aes(xmin = ci.lower2, xmax = est.std), width = 0.13, color = "black"
+  ) +
+  geom_errorbar(
+    data = long_df %>% filter(ParamType == "Intercept-Intercept" & ci.upper <= 1),
+    aes(xmin = est.std, xmax = ci.upper2), width = 0.13, color = "black"
+  ) +
+  geom_segment(
+    data = filter(long_df, ci.upper > 1 & ParamType == "Intercept-Intercept"),
+    aes(x = est.std, xend = ci.upper2 + .05, y = Domain_Combination, yend = Domain_Combination),
+    arrow = arrow(type = "closed", length = unit(0.02, "inches")), color = "black"
+  ) +
+  geom_segment(
+    data = filter(long_df, ci.lower < -1 & ParamType == "Intercept-Intercept"),
+    aes(x = est.std, xend = ci.lower2, y = Domain_Combination, yend = Domain_Combination),
+    arrow = arrow(type = "closed", length = unit(0.02, "inches")), color = "black"
+  ) +
+  geom_point(shape = 21, size = 1.9, color = "black") +
+  facet_grid(Facet_Group ~ Dyad, scales = "free", space = "free") +
+  theme_minimal() +
+  labs(title = "Level-Level Correlations", x = "", y = "") +
+  scale_x_continuous(limits = c(-1.055, 1.055)) +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    text = element_text(size = 60, family = "Avenir", face = "bold"),
+    plot.title = element_text(
+      size = 106, family = "Avenir",
+      face = "bold", hjust = .5
+    ),
+    axis.text = element_text(
+      size = 60, family = "Avenir",
+      color = "black"
+    ),
+    strip.text = element_text(
+      size = 60, family = "Avenir",
+      face = "bold"
+    ),
+    legend.position = "none",
+    axis.text.y = element_text(
+      size = 60, family = "Avenir",
+      color = "black"
+    ),
+    panel.grid.major = element_line(color = "gray90"), # Make the grid lines visible
+    panel.grid.minor = element_line(color = "gray90"),
+  )
+
+ggsave("CoDev_LeveLevel_Viz.png",
+  plot = p1,
+  width = 5.25, height = 5.25, units = "in", dpi = 600
+)
+
+
+?unit
+```
+
+### Slope Slope visualization
+
+```{r}
+y_labels2 <- unique(long_df |> filter(ParamType == "Slope-Slope") |> pull(Domain_Combination)) |> rev()
+
+long_df <- long_df |>
+  mutate(Significant = ifelse(ci.lower > 0 | ci.upper < 0, "\u2605", ""))
+
+long_df
+
+# Define custom colors for each level of Dyad
+dyad_colors <- c("Child-Mom" = "#e41a1c", "Child-Dad" = "#377eb8", "Mom-Dad" = "#4daf4a")
+
+
+
+
+
+
+long_df
+y_labels2
+```
+
+```{r}
+
+### NEED TO FIX OPENNESS
+```
+
+# Data of interest is on several x axes seperated out by Domain Combo on the Y axis
+
+# Vertical ordering is provided by y_labels2
+
+# color is going to be along the dyad. Strategy is to split / facet this into three vertical sections.
+
+```{r}
+p4 <- long_df |>
+  filter(ParamType == "Slope-Slope") |>
+  ggplot(aes(x = est.std, y = factor(Domain_Combination, levels = y_labels2), fill = Dyad)) +
+  facet_grid(Facet_Group ~ Dyad, scales = "free", space = "free") +
+  geom_vline(xintercept = 0, color = "black", linetype = "solid", linewidth = .35) +
+  geom_errorbar(
+    data = long_df |> filter(ParamType == "Slope-Slope" & ci.lower >= -1),
+    aes(xmin = ci.lower2, xmax = est.std), width = 0.175, color = "black"
+  ) +
+  geom_errorbar(
+    data = long_df |> filter(ParamType == "Slope-Slope" & ci.upper <= 1),
+    aes(xmin = est.std, xmax = ci.upper2), width = 0.175, color = "black"
+  ) +
+  geom_segment(
+    data = filter(long_df, ci.upper > 1 & ParamType == "Slope-Slope"),
+    aes(x = est.std, xend = ci.upper2 + .05, y = Domain_Combination, yend = Domain_Combination),
+    arrow = arrow(type = "closed", length = unit(0.1, "inches")), color = "black"
+  ) +
+  geom_segment(
+    data = filter(long_df, ci.lower < -1 & ParamType == "Slope-Slope"),
+    aes(x = est.std, xend = ci.lower2, y = Domain_Combination, yend = Domain_Combination),
+    arrow = arrow(type = "closed", length = unit(0.1, "inches")), color = "black"
+  ) +
+  geom_point(shape = 21, size = 4.5, color = "black") +
+  geom_text(aes(label = Significant, x = 1.1285), color = "#984ea3", size = 39, fontface = "bold") +
+  scale_fill_manual(values = dyad_colors) +
+  theme_minimal() +
+  labs(title = "Latent Slope-Slope Correlations", x = "", y = "") +
+  scale_x_continuous(limits = c(-1.129, 1.129)) +
+  theme(
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    text = element_text(size = 120, family = "Avenir", face = "bold"),
+    plot.title = element_text(
+      size = rel(2.5), family = "Garamond",
+      face = "bold", hjust = 0, margin = margin(b = 30)
+    ),
+    axis.text = element_text(## Correlation Labels
+      size = rel(.85), family = "Avenir",
+      color = "black", hjust = .5, vjust = .5
+    ), 
+    strip.text = element_text(# Dyad and Model type (hetero vs. homo) labels
+      size = rel(1.5), family = "Avenir",
+      face = "bold", vjust = .5,
+      hjust = .5
+    ), 
+    legend.position = "none",
+    axis.text.y = element_text(
+      size = rel(1), family = "Avenir",
+      color = "black",
+      vjust = .5
+    ), # model labels
+    panel.grid.major = element_line(color = "gray90"), # Make the grid lines visible
+    panel.grid.minor = element_line(color = "gray97"),
+    panel.spacing = unit(2, "lines") # based on the line height of the plot...
+  )
+
+ggsave("CoDev_SlopeSlope_Viz7.png",
+  plot = p4,
+  width = 15, height = 17, units = "in", dpi = 600
+)
+
+# 5.25 w x h
+# width =40, height =40, units = "in") <= sorta works for svg
+```
+
+# ----- Section 4: ADDITIONAL ANALYSIS: WITHIN DYAD CORRELATIONS----- ----- -----
+
+# Within Dyad Correlations
+
+```{r}
+LongData2 <- ZSCORED |>
+  pivot_longer(
+    cols = -FAMID,
+    names_to = "variable",
+    values_to = "score"
+  ) |>
+  mutate(
+    Person = case_when(
+      str_detect(variable, "^c") ~ "Child",
+      str_detect(variable, "^m") ~ "Mother",
+      str_detect(variable, "^d") ~ "Father"
+    ),
+    Wave = as.integer(str_extract(variable, "\\d+")),
+    Trait = case_when(
+      str_detect(variable, "E") ~ "Extraversion",
+      str_detect(variable, "A") ~ "Agreeableness",
+      str_detect(variable, "C") ~ "Conscientiousness",
+      str_detect(variable, "N") ~ "Neuroticism",
+      str_detect(variable, "O") ~ "Openness"
+    ),
+    Parcel = str_extract(variable, "\\d+$")
+  )
+
+LongData2
+```
+
+```{r}
+ChildMother <- LongData2 |>
+  filter((Person == "Child" & Wave >= 5) | (Person == "Mother" & Wave >= 5)) |> # get the people in the dyads #this should be (Child or Mother) AND Wave 5... but it doesn't matter here
+  # and get them such that they start at the same wave
+  group_by(FAMID, Person, Trait, Wave) |> # for each Family, for each person/trait/wave
+  summarise(MeanScore = mean(score), .groups = "drop") |> # this calcualtes the domain score per wave per trait per person per family
+  pivot_wider( # this aligns peoples scores into pairs
+    names_from = Person,
+    values_from = MeanScore
+  ) |>
+  drop_na() |> #
+  group_by(FAMID, Trait) |>
+  filter(n() >= 3) |> # Filter out groups with less than three rows
+  mutate(
+    sd_Child = sd(Child, na.rm = TRUE),
+    sd_Mother = sd(Mother, na.rm = TRUE)
+  ) |>
+  filter(sd_Child != 0 & sd_Mother != 0) |> # Filter out rows where the standard deviation is zero
+  summarise(Correlation = cor(Child, Mother, use = "complete.obs"), .groups = "drop")
+# "complete.obs"
+
+
+ChildFather <- LongData2 |>
+  filter((Person == "Child" & Wave >= 5) | (Person == "Father" & Wave >= 5)) |>
+  group_by(FAMID, Person, Trait, Wave) |>
+  summarise(MeanScore = mean(score), .groups = "drop") |>
+  pivot_wider(
+    names_from = Person,
+    values_from = MeanScore
+  ) |>
+  drop_na() |>
+  group_by(FAMID, Trait) |>
+  filter(n() >= 3) |> # Filter out groups with less than three rows
+  mutate(
+    sd_Child = sd(Child, na.rm = TRUE),
+    sd_Father = sd(Father, na.rm = TRUE)
+  ) |>
+  filter(sd_Child != 0 & sd_Father != 0) |> # Filter out rows where the standard deviation is zero
+  summarise(Correlation = cor(Child, Father, use = "complete.obs"), .groups = "drop")
+
+
+MotherFather <- LongData2 |>
+  filter((Person == "Mother" & Wave >= 1) | (Person == "Father" & Wave >= 1)) |>
+  group_by(FAMID, Person, Trait, Wave) |>
+  summarise(MeanScore = mean(score), .groups = "drop") |>
+  pivot_wider(
+    names_from = Person,
+    values_from = MeanScore
+  ) |>
+  drop_na() |>
+  group_by(FAMID, Trait) |>
+  filter(n() >= 3) |> # Filter out groups with less than three rows
+  mutate(
+    sd_Mother = sd(Mother, na.rm = TRUE),
+    sd_Father = sd(Father, na.rm = TRUE)
+  ) |>
+  filter(sd_Mother != 0 & sd_Father != 0) |> # Filter out rows where the standard deviation is zero
+  summarise(Correlation = cor(Mother, Father, use = "complete.obs"), .groups = "drop")
+#
+ChildMother |> mutate(Correlation = round(Correlation,2))
+#
+```
+
+```{r}
+#Numnber of correlations
+ChildMother |> group_by(Trait) |> summarize(N = n())
+```
+
+## Visualization: Intradyadic Correlations
+
+```{r}
+Colors <- c(
+  "Agreeableness" = "#8dd3c7",
+  "Conscientiousness" = "#ffffb3",
+  "Extraversion" = "#bebada",
+  "Neuroticism" = "#fb8072",
+  "Openness" = "#80b1d3"
+)
+
+colors <- c(
+  "Agreeableness" = "#8dd3c7",
+  "Conscientiousness" = "#ffffb3",
+  "Extraversion" = "#bebada",
+  "Neuroticism" = "#fb8072",
+  "Openness" = "#80b1d3"
+)
+
+
+
+CombinedData <- bind_rows(
+  ChildMother |> mutate(Label = "Child-Mother"),
+  ChildFather |> mutate(Label = "Child-Father"),
+  MotherFather |> mutate(Label = "Mother-Father")
+)
+CombinedData |> group_by(Label,Trait) |> summarize(N = n())
+
+```
+
+```{r}
+CombinedDataMeans <- CombinedData |>
+  group_by(Label, Trait) |>
+  summarize(MeanCorrelation = mean(Correlation),
+            Size = n(),
+            .groups = "drop")
+
+trait_order <- c("Extraversion", "Agreeableness", "Conscientiousness", "Neuroticism", "Openness")
+# adjust factor levels and tweak text to get the final apperance correct
+CombinedData <- CombinedData |>
+  mutate(
+    Trait = factor(Trait, levels = trait_order),
+    Label = factor(Label, levels = c("Child-Mother", "Child-Father", "Mother-Father")),
+    Correlations = Correlation
+  )
+#MotherFather |> mutate(Correlation=round(Correlation,3))
+#MotherFather |> group_by(FAMID) |> summarise(MeanAbsCorr = mean(abs(Correlation)))
+CombinedDataMeans 
+```
+
+Means and Stds
+
+```{r}
+CombinedDataMeansSD <- CombinedData |>
+  group_by(Label, Trait) |>
+  summarize(
+    MeanCorrelation = mean(Correlations,na.rm = TRUE),
+    SDCorrelation = sd(Correlations,na.rm = TRUE),
+    Size = n(),
+    .groups = "drop"
+  ) |> mutate_if(is.numeric, round, 2)
+CombinedDataMeansSD 
+```
+
+```{r}
+my_theme <- function() {
+  theme_classic() +
+    theme(
+      legend.position = "none",
+      legend.title = element_text(face = "bold", size = rel(1), family = "Avenir"),
+      legend.text = element_text(face = "italic", size = rel(1), family = "Avenir"),
+      axis.text = element_text(face = "bold", size = rel(1.4), color = "black", family = "Avenir"),
+      axis.title = element_text(face = "bold", size = rel(1.2), family = "Avenir"),
+      plot.title = element_text(face = "bold", size = rel(3), hjust = .5, family = "Garamond", margin = margin(b = 20)),
+      plot.subtitle = element_text(face = "italic", size = rel(1.2), hjust = .5, family = "Avenir"),
+      strip.text = element_text(face = "bold", size = rel(2), color = "white", family = "Avenir"),
+      strip.background = element_rect(fill = "black", color = NA),
+      strip.text.y = element_text(margin = margin(t = 15, b = 15), family = "Avenir"), # Increase top and bottom margins
+      axis.line.x = element_line(color = "black", linewidth = 0.5, lineend = "square"), # Customize the x-axis line
+      axis.line.y = element_line(color = "black", linewidth = 0.5, lineend = "round"), # Customize the y-axis line
+      axis.ticks = element_line(color = "black", linewidth = 0.5, lineend = "square"), # Customize the axis ticks
+      panel.background = element_rect(fill = "white", color = NA), # Ensure the panel background is white
+      plot.background = element_rect(fill = "white", color = NA),
+      axis.text.y = element_text(vjust = -1.5, family = "Avenir") # Move y-axis labels up
+    )
+}
+
+#CombinedPlot <- ggplot(CombinedData, aes(x = Correlations, y = Trait, fill = Trait)) +
+#  geom_density_ridges(alpha = 0.67, linewidth = 0.5) +
+#  scale_x_continuous(limits = c(-1, 1)) +
+#  scale_y_discrete(expand = expansion(add = c(0, 1.75)), limits = rev(levels(CombinedData$Trait))) +
+#  scale_fill_manual(values = Colors) +
+##  theme_ridges() +
+#  my_theme() +
+#  labs(title = "Distributions of Intradyadic Correlations", x = "Correlation Strengths", y = NULL) +
+#  facet_wrap(~Label, ncol = 3)
+#CombinedPlot
+# rm(CombinedPlot)
+#ggsave("CoDevRidgelines7.png", CombinedPlot, width = 15, height = 8, dpi = 600, device = png)
+#2
+CombinedData
+```
+
+```{r}
+CombinedDataMeansSD <- CombinedDataMeansSD |>
+  mutate(
+    TraitYPos = as.numeric(factor(Trait, levels = rev(levels(CombinedData$Trait))))
+  )
+
+CombinedPlot = ggplot(CombinedData, aes(x = Correlations, y = Trait, fill = Trait)) +
+  geom_density_ridges(alpha = 0.82, linewidth = 0.55,) +
+  scale_x_continuous(limits = c(-1, 1)) +
+  scale_y_discrete(expand = expansion(add = c(0, 1.85)), limits = rev(levels(CombinedData$Trait))) +
+  scale_fill_manual(values = Colors) +
+  theme_ridges() +
+  my_theme() +
+  labs(title = "Distributions of Intradyadic Correlations", x = "Correlation Strengths", y = NULL) +
+  geom_text(
+    data = CombinedDataMeansSD,
+    aes(x = -.19,
+        y = TraitYPos + .975, 
+        label = paste0("M=", MeanCorrelation, " (", SDCorrelation,")")),
+    color = "#000000",
+    hjust = 0,
+    vjust = 1,
+    size = 3.92
+  ) +
+  facet_wrap(~Label, ncol = 3)
+ggsave("CoDevRidgelines9.png", CombinedPlot, width = 15, height = 5.95, dpi = 600, device = png)
+```
+
+# Strongest Correlation Per Family
+
+### ChildMother
+
+```{r}
+MaxChildMotherCorrPerFam <- ChildMother |>
+  group_by(FAMID) |>
+  summarise(MaxAbsCorr = max(abs(Correlation)))
+print(MaxChildMotherCorrPerFam |> nrow())
+MaxChildMotherCorrPerFam |>
+  filter(MaxAbsCorr > .7) |>
+  nrow()
+MaxChildMotherCorrPerFam |>
+  filter(MaxAbsCorr > .7) |>
+  nrow() / MaxChildMotherCorrPerFam |> nrow()
+```
+
+### ChildFather
+
+```{r}
+MaxChildFatherCorrPerFam <- ChildFather |>
+  group_by(FAMID) |>
+  summarise(MaxAbsCorr = max(abs(Correlation)))
+print(MaxChildFatherCorrPerFam |> nrow())
+MaxChildFatherCorrPerFam |>
+  filter(MaxAbsCorr > .7) |>
+  nrow()
+MaxChildFatherCorrPerFam |>
+  filter(MaxAbsCorr > .7) |>
+  nrow() / MaxChildFatherCorrPerFam |> nrow()
+```
+
+### MotherFather
+
+```{r}
+MaxMotherFatherCorrPerFam <- MotherFather |>
+  group_by(FAMID) |>
+  summarise(MaxAbsCorr = max(abs(Correlation)))
+print(MaxMotherFatherCorrPerFam |> nrow())
+MaxMotherFatherCorrPerFam |>
+  filter(MaxAbsCorr > .7) |>
+  nrow()
+MaxMotherFatherCorrPerFam |>
+  filter(MaxAbsCorr > .7) |>
+  nrow() / MaxMotherFatherCorrPerFam |> nrow()
+```
+
+...
+
+```{r}
+ChildMother |>
+  filter(abs(Correlation) > .7) |>
+  group_by(Trait) |>
+  count()
+?drop_na
+115 / 350
+```
+
+```{r}
+trait_order <- c("Extraversion", "Agreeableness", "Conscientiousness", "Neuroticism", "Openness")
+MotherFather <- MotherFather |>
+  mutate(Trait = factor(Trait, levels = trait_order))
+
+
+MotherFather |>
+  select(Trait, Correlation) |> ## swap out base dataframe as needed
+  group_by(Trait) |>
+  summarize(
+    mean = mean(Correlation, na.rm = TRUE),
+    std_dev = sd(Correlation, na.rm = TRUE)
+  ) |>
+  mutate_if(is.numeric, round, digits = 2) |>
+  kable("html", escape = FALSE) %>%
+  kable_styling(full_width = FALSE, font_size = 15)
+```
+
+```{r}
+ChildMother
+```
+
+## Histograms
+
+```{r}
+MotherFather %>%
+  ggplot(aes(x = Correlation, fill = Trait)) +
+  geom_histogram(binwidth = 0.2, color = "black") +
+  facet_wrap(~Trait, scales = "free") +
+  scale_fill_manual(values = colors) +
+  labs(
+    title = "Histograms of Inter-spousal Correlations over 16 years",
+    x = "Correlation",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r}
+ChildMother %>%
+  ggplot(aes(x = Correlation, fill = Trait)) +
+  geom_histogram(binwidth = 0.2, color = "black") +
+  facet_wrap(~Trait, scales = "free") +
+  scale_fill_manual(values = colors) +
+  labs(
+    title = "Histograms of Adolescent-Mom Correlations from",
+    x = "Correlation",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r}
+ChildFather %>%
+  ggplot(aes(x = Correlation, fill = Trait)) +
+  geom_histogram(binwidth = 0.2, color = "black") +
+  facet_wrap(~Trait, scales = "free") +
+  scale_fill_manual(values = colors) +
+  labs(
+    title = "Histograms of Adolescent-Dad Correlations",
+    x = "Correlation",
+    y = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+You have now made it to line 5188. Thanks for reading this this far. For a more fun read, check out Kim Stanely Robinson's 2312 if you like hard sci-fi or his New York 2140 if you like futuristic and hopeful eco-fiction. Fin.
